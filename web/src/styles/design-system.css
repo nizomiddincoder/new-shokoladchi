@@ -1,0 +1,318 @@
+/* ============================================================
+   Shokoladchi dizayn tizimi — bitta umumiy fayl
+   (mijoz Mini App va admin paneli uchun)
+   ============================================================ */
+
+:root {
+  /* Brend — shokolad paleti (yashil ishlatilmaydi) */
+  --color-primary-700: #3B2216;
+  --color-primary-600: #4B2E1F;
+  --color-primary-400: #8B5E3C;
+  --color-primary-100: #F3EBE4;
+
+  --color-bg: #F7F5F3;
+  --color-surface: #FFFFFF;
+  --color-text: #2A1D16;
+  --color-text-muted: #8A7B72;
+  --color-border: #EAE3DE;
+
+  /* Faqat semantik ranglar (brend uchun emas) */
+  --color-success: #2E7D32;
+  --color-warning: #E08E0B;
+  --color-danger: #C62828;
+
+  --radius-card: 16px;
+  --radius-btn: 12px;
+  --radius-pill: 999px;
+  --shadow: 0 2px 8px rgba(42, 29, 22, 0.06);
+
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+
+  /* Telegram temasi bilan uyg'unlashuv uchun */
+  --nav-h: 64px;
+}
+
+/* Tungi rejim (Telegram themeParams bo'yicha qo'llanadi) */
+[data-theme="dark"] {
+  --color-bg: #1C1410;
+  --color-surface: #2A1F18;
+  --color-text: #F3EBE4;
+  --color-text-muted: #B3A49A;
+  --color-border: #3D2E24;
+  --color-primary-100: #3A2A20;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Pul va miqdorlar uchun tabulyar raqamlar */
+.money, .num { font-variant-numeric: tabular-nums; }
+
+.muted { color: var(--color-text-muted); }
+.small { font-size: 13px; }
+
+:focus-visible { outline: 2px solid var(--color-primary-400); outline-offset: 2px; }
+
+/* ---------- Kartochkalar ---------- */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+.card-pad { padding: var(--sp-4); }
+
+/* ---------- Tugmalar ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: none; cursor: pointer;
+  border-radius: var(--radius-btn);
+  padding: 11px 18px;
+  font: 600 15px var(--font);
+  color: var(--color-text);
+  background: var(--color-primary-100);
+  transition: background .15s, transform .05s;
+  text-decoration: none;
+}
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary { background: var(--color-primary-600); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--color-primary-700); }
+.btn-secondary { background: var(--color-primary-100); color: var(--color-primary-700); }
+.btn-secondary:hover:not(:disabled) { background: var(--color-border); }
+.btn-ghost { background: transparent; color: var(--color-primary-600); }
+.btn-ghost:hover:not(:disabled) { background: var(--color-primary-100); }
+.btn-danger { background: transparent; color: var(--color-danger); }
+.btn-danger:hover:not(:disabled) { background: rgba(198, 40, 40, 0.08); }
+.btn-block { width: 100%; }
+.btn-sm { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+
+/* ---------- Inputlar ---------- */
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--sp-3); }
+.field > label { font-size: 13px; font-weight: 600; color: var(--color-text-muted); }
+.input, .textarea, .select {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-btn);
+  padding: 11px 14px;
+  font: 500 15px var(--font);
+  color: var(--color-text);
+}
+.input::placeholder, .textarea::placeholder { color: var(--color-text-muted); }
+.input:focus, .textarea:focus, .select:focus { border-color: var(--color-primary-400); outline: none; }
+.textarea { resize: vertical; min-height: 84px; }
+
+/* ---------- Chip / filtrlar ---------- */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  padding: 8px 14px;
+  font: 600 13px var(--font);
+  cursor: pointer; white-space: nowrap;
+}
+.chip.active {
+  background: var(--color-primary-100);
+  border-color: transparent;
+  color: var(--color-primary-700);
+}
+
+/* ---------- Holat belgilari (badge) — faqat semantik ranglar ---------- */
+.badge {
+  display: inline-flex; align-items: center;
+  border-radius: var(--radius-pill);
+  padding: 4px 10px;
+  font: 600 12px var(--font);
+  white-space: nowrap;
+}
+.badge-neutral { background: var(--color-primary-100); color: var(--color-primary-700); }
+.badge-success { background: rgba(46, 125, 50, .12); color: var(--color-success); }
+.badge-warning { background: rgba(224, 142, 11, .14); color: var(--color-warning); }
+.badge-danger  { background: rgba(198, 40, 40, .10); color: var(--color-danger); }
+.badge-info    { background: rgba(139, 94, 60, .14); color: var(--color-primary-600); }
+
+/* ---------- Sarlavhalar ---------- */
+.h1 { font-size: 22px; font-weight: 700; margin: 0; }
+.h2 { font-size: 17px; font-weight: 700; margin: 0; }
+
+/* ---------- Past navigatsiya (mijoz) ---------- */
+.bottom-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; justify-content: space-around; align-items: stretch;
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+.bottom-nav .tab {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--color-text-muted);
+  font: 600 11px var(--font);
+  text-decoration: none; cursor: pointer;
+  border-radius: var(--radius-btn);
+  margin: 6px 4px;
+}
+.bottom-nav .tab.active {
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+}
+.tab .tab-badge {
+  position: absolute; transform: translate(12px, -6px);
+  background: var(--color-primary-600); color: #fff;
+  font: 700 10px var(--font);
+  border-radius: var(--radius-pill); padding: 1px 6px;
+}
+
+/* ---------- Yon panel (admin) ---------- */
+.sidebar {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 232px; z-index: 30;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex; flex-direction: column;
+  padding: var(--sp-5) var(--sp-3);
+  gap: 4px;
+}
+.sidebar .brand {
+  display: flex; align-items: center; gap: 10px;
+  font: 700 17px var(--font);
+  padding: 0 var(--sp-2) var(--sp-4);
+}
+.sidebar a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-btn);
+  color: var(--color-text-muted);
+  font: 600 14px var(--font);
+  text-decoration: none;
+}
+.sidebar a.active { background: var(--color-primary-100); color: var(--color-primary-700); }
+.sidebar a:hover:not(.active) { background: var(--color-bg); }
+.admin-main { margin-left: 232px; padding: var(--sp-5) var(--sp-6); min-height: 100vh; }
+
+/* Mobil ekranda yon panel yuqoriga o'tadi */
+@media (max-width: 900px) {
+  .sidebar {
+    position: sticky; top: 0; width: 100%; height: auto; flex-direction: row;
+    overflow-x: auto; padding: var(--sp-2); align-items: center;
+    border-right: none; border-bottom: 1px solid var(--color-border);
+  }
+  .sidebar .brand { padding: 0 var(--sp-2); }
+  .sidebar a { padding: 8px 12px; white-space: nowrap; }
+  .admin-main { margin-left: 0; padding: var(--sp-4); }
+}
+
+/* ---------- Jadvallar (admin, zichroq uslub) ---------- */
+.table-wrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th {
+  text-align: left; font: 600 12px var(--font);
+  color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .04em;
+  padding: 10px 12px; border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.table td { padding: 10px 12px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+.table tr:last-child td { border-bottom: none; }
+.table tbody tr:hover { background: var(--color-bg); }
+.table tbody tr.clickable { cursor: pointer; }
+.table .right { text-align: right; }
+
+/* ---------- Modal ---------- */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(42, 29, 22, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-4);
+}
+.modal {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+  width: 100%; max-width: 480px;
+  max-height: 90vh; overflow-y: auto;
+  padding: var(--sp-5);
+}
+.modal h3 { margin: 0 0 var(--sp-4); font-size: 17px; }
+.modal-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-4); }
+
+/* ---------- Miqdor o'zgartirgich (stepper) ---------- */
+.stepper {
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.stepper button {
+  width: 34px; height: 34px; border: none; background: transparent;
+  font-size: 17px; font-weight: 700; cursor: pointer; color: var(--color-primary-600);
+}
+.stepper button:hover { background: var(--color-primary-100); }
+.stepper .stepper-val {
+  min-width: 32px; text-align: center;
+  font: 700 15px var(--font); font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Yopiq past panel (sticky bottom CTA) ---------- */
+.sticky-cta {
+  position: fixed; left: 0; right: 0;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  z-index: 35;
+}
+
+/* ---------- KPI kartochkalari ---------- */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-3); }
+.kpi { padding: var(--sp-4); }
+.kpi .kpi-label { font-size: 13px; color: var(--color-text-muted); font-weight: 600; }
+.kpi .kpi-value { font-size: 24px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+/* ---------- Oddiy gorizontal diagramma (CSS bar) ---------- */
+.bar-row { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-2); margin-bottom: 10px; font-size: 14px; }
+.bar-track { height: 8px; border-radius: var(--radius-pill); background: var(--color-primary-100); grid-column: 1 / -1; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: var(--radius-pill); background: var(--color-primary-400); }
+
+/* ---------- Rasm placeholder ---------- */
+.img-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-primary-100); color: var(--color-primary-400);
+}
+
+/* ---------- Yordamchi layout ---------- */
+.row { display: flex; align-items: center; gap: var(--sp-2); }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+.page { max-width: 720px; margin: 0 auto; padding: var(--sp-4); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.section-title { margin: var(--sp-5) 0 var(--sp-3); }
+.mb-2 { margin-bottom: var(--sp-2); }
+.mb-4 { margin-bottom: var(--sp-4); }
+.mt-4 { margin-top: var(--sp-4); }
+
+/* Skeleton yuklanish holati */
+.skeleton {
+  background: linear-gradient(90deg, var(--color-border) 25%, var(--color-primary-100) 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: sk 1.2s infinite;
+  border-radius: var(--radius-btn);
+}
+@keyframes sk { to { background-position: -200% 0; } }
+
+/* Mijoz ilovasi past navigatsiya ostida ko'rinib qolmasligi uchun */
+.customer-page { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + var(--sp-4)); }
