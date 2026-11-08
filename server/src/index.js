@@ -27,6 +27,10 @@ app.use((err, req, res, next) => {
   if (!res.headersSent) res.status(500).json({ error: 'Server xatosi' });
 });
 
+// Boshlang'ich ma'lumotlar: admin yo'q bo'lsa yaratamiz (yangi deploy yoki volume uchun),
+// demo katalog SEED_DEMO=false bo'lmasa qo'shiladi
+require('./seed').seed({ withDemo: process.env.SEED_DEMO !== 'false' });
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Shokoladchi API ${PORT} portda ishlayapti`));
 
