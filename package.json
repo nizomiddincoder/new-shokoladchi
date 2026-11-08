@@ -1,0 +1,12 @@
+{
+  "name": "shokoladchi",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "build": "cd server && npm ci",
+    "start": "cd server && npm start"
+  }
+}
