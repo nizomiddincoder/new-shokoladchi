@@ -15,15 +15,23 @@ router.post('/auth', (req, res) => {
   const parsed = verifyInitData(initData, process.env.BOT_TOKEN || '');
 
   let tgId, tgName;
-  if (parsed) {
-    const u = JSON.parse(parsed.user || '{}');
+  if (parsed.ok) {
+    const u = JSON.parse(parsed.data.user || '{}');
     tgId = String(u.id || '');
     tgName = u.first_name || u.username || '';
   } else if (process.env.DEV_AUTH === '1') {
     // Faqat lokal test uchun (Telegram'dan tashqarida brauzerda ochish)
     tgId = 'dev'; tgName = 'Test mijoz';
   } else {
-    return res.status(401).json({ error: 'initData tasdiqlanmadi' });
+    // Sababni aniq ko'rsatamiz — tashxis qo'yish uchun
+    const reasons = {
+      no_token: 'Serverda BOT_TOKEN sozlanmagan — Railway Variables ga qo\'shing',
+      no_initdata: 'initData kelmadi — ilova Telegram Mini App sifatida ochilmagan (oddiy brauzer/link emas)',
+      no_hash: 'initData formati buzilgan (hash yo\'q)',
+      bad_hash: 'initData imzosi mos emas — BOT_TOKEN boshqa botga tegishli yoki xato kiritilgan',
+      expired: 'initData eskirgan — Mini App ni yopib qayta oching',
+    };
+    return res.status(401).json({ error: reasons[parsed.reason] || 'initData tasdiqlanmadi' });
   }
 
   let user = db.prepare('SELECT id, telegram_id, name, phone FROM users WHERE telegram_id = ?').get(tgId);
