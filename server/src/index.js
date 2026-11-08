@@ -21,6 +21,14 @@ app.use('/api/admin', require('./routes/admin'));
 // Sog'liq tekshiruvi (Railway monitoring uchun)
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Veb-ilova (web/dist) — API bilan bir domaindan beriladi: /admin va / to'liq sayt
+// (dist build'da yaratiladi; yo'q bo'lsa — faqat API rejimi, masalan Root Directory=server bilan)
+const distDir = path.join(__dirname, '..', '..', 'web', 'dist');
+if (require('fs').existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get(/^\/(?!api|uploads).*/, (req, res) => res.sendFile(path.join(distDir, 'index.html')));
+}
+
 // Markaziy xato ushlagich
 app.use((err, req, res, next) => {
   console.error('Server xatosi:', err.message);

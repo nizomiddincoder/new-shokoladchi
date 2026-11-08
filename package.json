@@ -6,7 +6,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "build": "cd server && npm ci",
+    "build": "npm ci --prefix server && npm ci --prefix web && npm run build --prefix web",
     "start": "cd server && npm start"
   }
 }
