@@ -16,6 +16,7 @@ type Env = {
   GEMINI_IMAGE_MODEL: string;
   GEMINI_IMAGE_SIZE: string | null;
   GEMINI_TEXT_MODEL: string;
+  GEMINI_SEGMENT_MODEL: string;
   GEMINI_BASE_URL: string | null;
   UPLOAD_DIR: string;
   TZ: string;
@@ -79,6 +80,8 @@ function loadEnv(): Env {
     GEMINI_IMAGE_SIZE: process.env.GEMINI_IMAGE_SIZE?.trim() || null,
     // Avtomatik tarjima (o'zbekcha -> ruscha) uchun
     GEMINI_TEXT_MODEL: process.env.GEMINI_TEXT_MODEL?.trim() || 'gemini-2.5-flash',
+    // "Mening shokoladim": odam niqobini (segmentatsiya) aniqlash uchun — Gemini 2.5 Flash/Pro
+    GEMINI_SEGMENT_MODEL: process.env.GEMINI_SEGMENT_MODEL?.trim() || 'gemini-2.5-flash',
     // Ixtiyoriy: Gemini API uchun proxy manzili
     GEMINI_BASE_URL: process.env.GEMINI_BASE_URL?.trim() || null,
     UPLOAD_DIR: path.resolve(process.env.UPLOAD_DIR || '/data/uploads'),
