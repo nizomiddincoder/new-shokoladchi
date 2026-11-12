@@ -7,7 +7,7 @@ import { get, upload } from '../../shared/api';
 import type { PersonalTemplate } from '../../shared/types';
 import { Button, Card, Empty, ErrorState, Field, PageLoader, Segmented, Stepper, clsx, useToast } from '../../shared/ui';
 import { CameraCapture, cameraSupported } from '../../shared/CameraCapture';
-import { TEXT_COLORS, areaPx, ensureFonts, exportDesign, loadImage, photoRect, renderDesign, type DesignState } from '../../shared/personalRender';
+import { DEFAULT_FONT, FONTS, TEXT_COLORS, areaPx, type FontKey, ensureFonts, exportDesign, loadImage, photoRect, renderDesign, type DesignState } from '../../shared/personalRender';
 import { money, unitLabel } from '../../shared/format';
 import { haptic } from '../../shared/telegram';
 import { PageHeader } from '../layout';
@@ -22,7 +22,7 @@ export type PersonalCheckoutState = {
   unit: PersonalTemplate['product']['unit'];
 };
 
-const initialDesign: DesignState = { photo: null, zoom: 1, offX: 0, offY: 0, text: '', textColor: '#FFFFFF', textSize: 'M', textPos: 'bottom' };
+const initialDesign: DesignState = { photo: null, zoom: 1, offX: 0, offY: 0, text: '', textColor: '#FFFFFF', textSize: 'M', textPos: 'bottom', font: DEFAULT_FONT };
 
 export function PersonalPage() {
   const { t, i18n } = useTranslation();
@@ -78,7 +78,7 @@ export function PersonalPage() {
     c.style.height = `${(width * tpl.height) / tpl.width}px`;
     const ctx = c.getContext('2d')!;
     let cancelled = false;
-    void ensureFonts().then(() => {
+    void ensureFonts(d.font).then(() => {
       if (!cancelled) renderDesign(ctx, tplImg, tpl.width, tpl.height, tpl, d, scale, t('personal.placeholder'));
     });
     return () => {
@@ -243,6 +243,27 @@ export function PersonalPage() {
             </Field>
             {d.text.trim() && (
               <>
+                <div>
+                  <div className="label">{t('personal.font')}</div>
+                  <div className="no-scrollbar flex gap-2 overflow-x-auto">
+                    {(Object.keys(FONTS) as FontKey[]).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setD((x) => ({ ...x, font: k }))}
+                        className={clsx(
+                          'flex h-14 min-w-[92px] shrink-0 flex-col items-center justify-center rounded-xl border px-3',
+                          (d.font ?? DEFAULT_FONT) === k ? 'border-primary bg-primary-soft text-primary-dark' : 'border-line bg-card text-ink',
+                        )}
+                      >
+                        <span style={{ fontFamily: FONTS[k].family, fontWeight: FONTS[k].weight }} className="text-[20px] leading-none">
+                          Aa Яя
+                        </span>
+                        <span className="mt-1 text-[10px] font-semibold text-muted">{k === DEFAULT_FONT ? t('personal.fontApp') : FONTS[k].label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
                   {TEXT_COLORS.map((c) => (
                     <button

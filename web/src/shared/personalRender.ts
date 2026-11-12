@@ -15,6 +15,26 @@ export type DesignState = {
   textColor: string;
   textSize: 'S' | 'M' | 'L';
   textPos: 'top' | 'bottom';
+  font?: FontKey;
+};
+
+/**
+ * Matn shriftlari. Birinchisi — dasturning o'z sarlavha shrifti (standart).
+ * Hammasi lotin va kirill harflarini qo'llaydi (app/index.html da ulangan).
+ */
+export const FONTS = {
+  playfair: { family: '"Playfair Display"', weight: 700, label: 'Playfair' },
+  nunito: { family: 'Nunito', weight: 800, label: 'Nunito' },
+  lobster: { family: 'Lobster', weight: 400, label: 'Lobster' },
+  caveat: { family: 'Caveat', weight: 700, label: 'Caveat' },
+  pacifico: { family: 'Pacifico', weight: 400, label: 'Pacifico' },
+} as const;
+export type FontKey = keyof typeof FONTS;
+export const DEFAULT_FONT: FontKey = 'playfair';
+
+export const fontCss = (key: FontKey | undefined, px: number) => {
+  const f = FONTS[key ?? DEFAULT_FONT];
+  return `${f.weight} ${Math.round(px)}px ${f.family}, Georgia, serif`;
 };
 
 export const TEXT_COLORS = ['#FFFFFF', '#4A3224', '#C0392B', '#D9A066', '#111111'];
@@ -117,7 +137,7 @@ export function renderDesign(
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = d.textPos === 'top' ? 'top' : 'bottom';
-    const setFont = () => (ctx.font = `700 ${Math.round(size)}px "Playfair Display", Georgia, serif`);
+    const setFont = () => (ctx.font = fontCss(d.font, size));
     setFont();
     // Maydonga sig'maguncha kichraytiramiz
     while (ctx.measureText(text).width > a.w * 0.92 && size > 10) {
@@ -140,7 +160,7 @@ export function renderDesign(
 
 /** To'liq o'lchamdagi yakuniy JPG (buyurtma uchun) */
 export async function exportDesign(template: HTMLImageElement, tw: number, th: number, area: Area, d: DesignState): Promise<Blob> {
-  await ensureFonts();
+  await ensureFonts(d.font);
   const canvas = document.createElement('canvas');
   canvas.width = tw;
   canvas.height = th;
@@ -149,9 +169,11 @@ export async function exportDesign(template: HTMLImageElement, tw: number, th: n
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('JPG yaratilmadi'))), 'image/jpeg', 0.95));
 }
 
-export async function ensureFonts() {
+/** Shrift yuklanmaguncha chizilsa, canvas oddiy shriftni ishlatib yuboradi — shuning uchun kutamiz */
+export async function ensureFonts(font?: FontKey) {
   try {
-    await Promise.all([document.fonts.load('700 48px "Playfair Display"'), document.fonts.load('700 24px Nunito')]);
+    const sample = 'Aa Яя ʻ';
+    await Promise.all([document.fonts.load(fontCss(font, 48), sample), document.fonts.load('700 24px Nunito', sample)]);
   } catch {
     /* shriftsiz ham chiziladi */
   }
