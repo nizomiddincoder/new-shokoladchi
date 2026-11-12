@@ -11,7 +11,8 @@ import { excelUpload, imageUpload } from '../lib/upload';
 import { buildProductsWorkbook, importProducts } from '../services/productExcel';
 import { escapeHtml, toNum } from '../lib/format';
 import { STAFF_ORDER_INCLUDE, staffOrderDto } from './staff';
-import { removeUpload, saveImage, saveJpeg, type Folder } from '../services/storage';
+import { missingUploads, removeUpload, saveImage, saveJpeg, type Folder } from '../services/storage';
+import { env } from '../env';
 import { dashboardStats, resolveRange } from '../services/stats';
 import { buildExport, type ExportType } from '../services/export';
 import { aiEnabled, aiMonthlyStats, enqueueCategoryImage, generateBanner } from '../services/ai';
@@ -754,6 +755,16 @@ adminRouter.post(
     }
     const saved = await saveImage(req.file.buffer, folder, folder === 'branding' ? { maxSize: 512, quality: 92 } : folder === 'categories' ? { maxSize: 600 } : {});
     res.status(201).json({ url: saved.url, thumbUrl: saved.thumbUrl });
+  }),
+);
+
+// ================= RASMLAR HOLATI =================
+/** Serverda topilmagan (qayta yuklash kerak bo'lgan) rasmlar ro'yxati */
+adminRouter.get(
+  '/storage/health',
+  ah(async (_req, res) => {
+    const r = await missingUploads();
+    res.json({ ...r, volume: !!process.env.RAILWAY_VOLUME_MOUNT_PATH || !env.isProd });
   }),
 );
 

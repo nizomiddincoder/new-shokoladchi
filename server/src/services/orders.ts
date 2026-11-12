@@ -1,6 +1,5 @@
-import fs from 'node:fs';
 import type { DeliveryType, OrderStatus, Prisma, Product, Role, User } from '@prisma/client';
-import { urlToPath } from './storage';
+import { uploadExists } from './storage';
 import { prisma, getSettings } from '../db';
 import { logger } from '../logger';
 import { HttpError, badRequest, conflict, forbidden, notFound } from '../lib/errors';
@@ -105,8 +104,8 @@ async function cartLines(customer: User): Promise<OrderLine[]> {
 async function personalLines(p: NonNullable<CreateOrderInput['personal']>): Promise<OrderLine[]> {
   const tpl = await prisma.personalTemplate.findFirst({ where: { id: p.templateId, isActive: true }, include: { product: true } });
   if (!tpl || !tpl.product.isActive) throw badRequest('TEMPLATE_UNAVAILABLE', 'Bu shablon hozir mavjud emas');
-  const designPath = /^\/uploads\/designs\/[\w-]+\.jpg$/.test(p.designUrl) ? urlToPath(p.designUrl) : null;
-  if (!designPath || !fs.existsSync(designPath)) throw badRequest('BAD_DESIGN', 'Dizayn rasmi topilmadi, qaytadan tayyorlang');
+  const designOk = /^\/uploads\/designs\/[\w-]+\.jpg$/.test(p.designUrl) && (await uploadExists(p.designUrl));
+  if (!designOk) throw badRequest('BAD_DESIGN', 'Dizayn rasmi topilmadi, qaytadan tayyorlang');
   const product = tpl.product;
   const qty = round3(p.qty);
   if (!validateQty(qty, toNum(product.step), toNum(product.minQty))) throw badRequest('BAD_QTY', 'Miqdor noto\'g\'ri');

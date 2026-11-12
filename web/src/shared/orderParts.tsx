@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Check, CircleX, ImageOff, MapPin, Package, Phone } from 'lucide-react';
 import type { Order, OrderStatus } from './types';
 import { Badge, clsx } from './ui';
+import { useImageOk } from './img';
 import { dateTime, isWeighted, mapsLinks, money, nameOf, personName, phoneHref, prettyPhone, qty, timeOnly, unitLabel } from './format';
 
 export const STATUS_TONE: Record<OrderStatus, 'info' | 'warning' | 'soft' | 'success' | 'danger' | 'primary' | 'accent' | 'muted'> = {
@@ -21,9 +22,14 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
 }
 
 export function ProductThumb({ url, className, alt = '' }: { url: string | null | undefined; className?: string; alt?: string }) {
+  const img = useImageOk(url);
   return (
     <div className={clsx('flex shrink-0 items-center justify-center overflow-hidden bg-surface', className)}>
-      {url ? <img src={url} alt={alt} loading="lazy" className="h-full w-full object-cover" /> : <ImageOff className="h-1/3 w-1/3 text-line" />}
+      {url && img.ok ? (
+        <img src={url} alt={alt} loading="lazy" onError={img.onError} className="h-full w-full object-cover" />
+      ) : (
+        <ImageOff className="h-1/3 w-1/3 text-line" />
+      )}
     </div>
   );
 }

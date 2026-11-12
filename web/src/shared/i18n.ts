@@ -497,6 +497,12 @@ const uz = {
     importNewCats: 'Yangi kategoriyalar',
     importRow: '{{row}}-qator',
     importDone: '{{created}} ta qo\'shildi, {{updated}} ta yangilandi',
+    imagesHealth: 'Rasmlar holati',
+    imagesOk: 'Barcha rasmlar joyida ({{count}} ta)',
+    imagesMissing: '{{count}} ta rasm serverda topilmadi — ularni qayta yuklang. Endi yuklangan rasmlar bazada ham saqlanadi va yo\'qolmaydi.',
+    imgKind: { logo: 'Logo', banner: 'Banner', category: 'Kategoriya', product: 'Mahsulot', template: 'Shablon' },
+    reupload: 'Qayta yuklash',
+    noVolumeHint: 'Railway Volume ulanmagan: rasmlar bazadagi zaxiradan tiklanadi. Tezlik uchun Volume (/data) ulash tavsiya etiladi.',
   },
 };
 
@@ -998,6 +1004,12 @@ const ru: Dict = {
     importNewCats: 'Новые категории',
     importRow: 'Строка {{row}}',
     importDone: 'Добавлено: {{created}}, обновлено: {{updated}}',
+    imagesHealth: 'Состояние изображений',
+    imagesOk: 'Все изображения на месте ({{count}})',
+    imagesMissing: 'На сервере не найдено изображений: {{count}} — загрузите их заново. Новые изображения теперь сохраняются и в базе и не пропадут.',
+    imgKind: { logo: 'Логотип', banner: 'Баннер', category: 'Категория', product: 'Товар', template: 'Шаблон' },
+    reupload: 'Загрузить заново',
+    noVolumeHint: 'Railway Volume не подключён: изображения восстанавливаются из резервной копии в базе. Для скорости рекомендуется подключить Volume (/data).',
   },
 };
 

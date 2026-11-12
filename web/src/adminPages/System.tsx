@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Download, FileSpreadsheet, History, ImagePlus, Send, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Download, FileSpreadsheet, History, ImageOff, ImagePlus, Send, Sparkles } from 'lucide-react';
 import { get, post, put, qs, upload } from '../shared/api';
 import { ShopLogo, type Branding } from '../shared/branding';
 import type { AuditEntry, Paged, Settings } from '../shared/types';
@@ -156,10 +157,63 @@ export function SettingsPage() {
               <Stat label={t('admin.aiQueue')} value={ai.queue} />
             </div>
           </Card>
+          <StorageHealthCard />
           <Button block size="lg" loading={busy} onClick={() => save()}>{t('common.save')}</Button>
         </div>
       </div>
     </AdminPage>
+  );
+}
+
+type StorageHealth = {
+  total: number;
+  volume: boolean;
+  missing: { kind: 'logo' | 'banner' | 'category' | 'product' | 'template'; id: number | null; name: string; url: string }[];
+};
+
+const FIX_PATH: Record<StorageHealth['missing'][number]['kind'], (id: number | null) => string> = {
+  logo: () => '/settings',
+  banner: () => '/banners',
+  category: () => '/categories',
+  product: (id) => `/products/${id}`,
+  template: () => '/templates',
+};
+
+/** Serverda topilmagan rasmlar: ularni qayta yuklash kerak */
+function StorageHealthCard() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const q = useQuery({ queryKey: ['storage-health'], queryFn: () => get<StorageHealth>('/admin/storage/health'), staleTime: 60_000 });
+  if (!q.data) return null;
+  const { missing } = q.data;
+  return (
+    <Card className="p-4">
+      <h3 className="mb-2 flex items-center gap-2 text-[15px] font-bold">
+        <ImageOff className="h-4 w-4 text-primary" /> {t('admin.imagesHealth')}
+      </h3>
+      {missing.length === 0 ? (
+        <div className="rounded-xl bg-success-soft p-3 text-[13px] font-semibold text-success">{t('admin.imagesOk', { count: q.data.total })}</div>
+      ) : (
+        <>
+          <div className="mb-2 rounded-xl bg-danger-soft p-3 text-[13px] font-semibold text-danger">{t('admin.imagesMissing', { count: missing.length })}</div>
+          <div className="max-h-64 space-y-1 overflow-y-auto">
+            {missing.map((m) => (
+              <button
+                key={`${m.kind}-${m.id}`}
+                onClick={() => navigate(FIX_PATH[m.kind](m.id))}
+                className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-surface"
+              >
+                <span className="min-w-0 truncate">
+                  <span className="text-muted">{t(`admin.imgKind.${m.kind}`)}:</span> <b>{m.name}</b>
+                </span>
+                <span className="shrink-0 font-bold text-primary">{t('admin.reupload')} →</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {!q.data.volume && <p className="mt-2 text-[12px] text-muted">{t('admin.noVolumeHint')}</p>}
+    </Card>
   );
 }
 

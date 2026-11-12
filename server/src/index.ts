@@ -20,7 +20,7 @@ import { customerRouter } from './routes/customer';
 import { staffRouter } from './routes/staff';
 import { manageRouter } from './routes/manage';
 import { adminRouter } from './routes/admin';
-import { ensureUploadDirs } from './services/storage';
+import { backfillUploadBlobs, ensureLocal, ensureUploadDirs, mimeOf } from './services/storage';
 import { startCron } from './services/cron';
 import { fillMissingCategoryImages, resumePendingAi } from './services/ai';
 import { runBroadcasts } from './services/broadcast';
@@ -92,7 +92,23 @@ function buildApp() {
   app.use('/api', (_req, _res, next) => next(notFound('NO_ROUTE', 'API topilmadi')));
 
   // Yuklangan rasmlar
-  app.use('/uploads', express.static(env.UPLOAD_DIR, { maxAge: '30d', immutable: true, fallthrough: false }));
+  app.use('/uploads', express.static(env.UPLOAD_DIR, { maxAge: '30d', immutable: true, fallthrough: true }));
+  // Diskda yo'q bo'lsa (deploy'da disk tozalangan) — bazadagi zaxiradan beramiz va diskka tiklaymiz
+  app.get('/uploads/*', async (req, res) => {
+    try {
+      const url = req.path.startsWith('/uploads/') ? req.path : `/uploads${req.path}`;
+      const full = await ensureLocal(decodeURIComponent(url));
+      if (full) {
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        return res.type(mimeOf(full)).sendFile(full);
+      }
+    } catch (err) {
+      logger.warn({ err, path: req.path }, 'Rasm zaxiradan berilmadi');
+    }
+    // Topilmagan rasm keshlanmasin — keyin yuklansa darhol ko'rinsin
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(404).end();
+  });
 
   // Frontend (Vite build)
   if (fs.existsSync(WEB_DIST)) {
@@ -124,6 +140,13 @@ async function main() {
     logger.info(r, 'Demo ma\'lumotlar');
   }
   await ensureUploadDirs();
+  // Diskdagi eski rasmlarni bazaga zaxiralash (fonda)
+  backfillUploadBlobs().catch((err) => logger.error({ err }, 'Rasmlarni zaxiralashda xato'));
+  if (env.isProd && !process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+    logger.warn(
+      'Railway Volume ulanmagan: disk har deploy\'da tozalanadi. Rasmlar bazadagi zaxiradan tiklanadi, lekin Volume ulash tavsiya etiladi',
+    );
+  }
 
   registerHandlers();
   try {

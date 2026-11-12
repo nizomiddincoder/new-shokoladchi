@@ -4,7 +4,7 @@ import { prisma } from '../db';
 import { logger } from '../logger';
 import { InputFile, appUrl, bot, safeCall } from '../bot/instance';
 import { t } from '../i18n';
-import { urlToPath } from './storage';
+import { ensureLocal } from './storage';
 
 const RATE_DELAY_MS = 45; // ~22 xabar/sekund (limit 25)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -42,7 +42,7 @@ export async function runBroadcasts() {
         const total = await prisma.user.count({ where });
         await prisma.broadcast.update({ where: { id: b.id }, data: { status: 'RUNNING', total, startedAt: new Date() } });
       }
-      const photoPath = urlToPath(b.imageUrl);
+      const photoPath = await ensureLocal(b.imageUrl);
       let lastUserId = b.lastUserId;
       let { sent, blocked, failed } = b;
       for (;;) {

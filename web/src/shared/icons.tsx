@@ -1,3 +1,4 @@
+import { useImageOk } from './img';
 import {
   Apple,
   Baby,
@@ -85,8 +86,9 @@ export function CategoryVisual({
   className?: string;
   iconClassName?: string;
 }) {
-  if (cat.imageUrl) {
-    return <img src={cat.imageUrl} alt="" loading="lazy" className={`shrink-0 bg-white object-cover ${className}`} />;
+  const img = useImageOk(cat.imageUrl);
+  if (cat.imageUrl && img.ok) {
+    return <img src={cat.imageUrl} alt="" loading="lazy" onError={img.onError} className={`shrink-0 bg-white object-cover ${className}`} />;
   }
   return (
     <span className={`flex shrink-0 items-center justify-center bg-primary-soft ${className}`}>

@@ -21,7 +21,7 @@ const RESUME_AFTER_MS = 6000;
  * Bannerlar karuseli: har 4 soniyada keyingisiga o'tadi, oxiridan boshiga qaytadi.
  * Barmoq bilan surish ham ishlaydi; surilganda avtomatik aylanish biroz to'xtab turadi.
  */
-function BannerCarousel({ banners, lang, onOpen }: { banners: Banner[]; lang: string; onOpen: (b: Banner) => void }) {
+function BannerCarousel({ banners, lang, onOpen, onBroken }: { banners: Banner[]; lang: string; onOpen: (b: Banner) => void; onBroken: (id: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
@@ -91,7 +91,7 @@ function BannerCarousel({ banners, lang, onOpen }: { banners: Banner[]; lang: st
                 count > 1 ? 'w-[88%]' : 'w-full',
               )}
             >
-              <img src={b.imageUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+              <img src={b.imageUrl} alt="" className="h-full w-full object-cover" draggable={false} onError={() => onBroken(b.id)} />
               {title && (
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-4 pb-3 pt-8 text-left text-[16px] font-bold text-white">
                   {title}
@@ -128,6 +128,9 @@ export function HomePage() {
   useBackButton(null);
   const q = useQuery({ queryKey: ['home'], queryFn: () => get<Home>('/catalog/home') });
   const d = q.data;
+  // Rasmi yuklanmagan banner ko'rsatilmaydi (buzilgan rasm o'rniga)
+  const [brokenBanners, setBrokenBanners] = useState<number[]>([]);
+  const banners = (d?.banners ?? []).filter((b) => !brokenBanners.includes(b.id));
 
   const openBanner = (b: Banner) => {
     if (b.linkType === 'CATEGORY' && b.linkId) navigate(`/catalog?category=${b.linkId}`);
@@ -188,7 +191,7 @@ export function HomePage() {
           <Skeleton className="aspect-[2.2/1] w-full rounded-2xl" />
         </div>
       ) : (
-        !!d?.banners.length && <BannerCarousel banners={d.banners} lang={i18n.language} onOpen={openBanner} />
+        !!banners.length && <BannerCarousel banners={banners} lang={i18n.language} onOpen={openBanner} onBroken={(id) => setBrokenBanners((x) => [...x, id])} />
       )}
 
       {/* Kategoriyalar */}

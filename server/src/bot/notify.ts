@@ -5,7 +5,7 @@ import { env } from '../env';
 import { t } from '../i18n';
 import { escapeHtml, formatMoney, formatQty, isWeighted, mapsLinks, unitLabel, toNum } from '../lib/format';
 import { InputFile, appUrl, bot, safeCall } from './instance';
-import { urlToPath } from '../services/storage';
+import { ensureLocal } from '../services/storage';
 import { logger } from '../logger';
 
 export const ORDER_FULL = {
@@ -94,7 +94,7 @@ export async function sendNewOrderToGroup(order: OrderFull) {
 export async function sendDesignFiles(order: OrderFull, chatId: string, lang: Language, replyTo?: number) {
   const designs = order.items.filter((i) => i.designUrl);
   for (const [idx, it] of designs.entries()) {
-    const p = urlToPath(it.designUrl);
+    const p = await ensureLocal(it.designUrl);
     if (!p) continue;
     const suffix = designs.length > 1 ? `-${idx + 1}` : '';
     const filename = `buyurtma-${order.number}${suffix}.jpg`;
@@ -201,7 +201,7 @@ export async function notifyCustomerStatus(order: OrderFull, status: OrderStatus
       if (order.finalTotal !== order.initialTotal) {
         text += '\n' + t(lang, 'c_total_changed', { old: formatMoney(order.initialTotal, lang), new: formatMoney(order.finalTotal, lang) });
       }
-      const photoPath = urlToPath(order.readyPhotoUrl);
+      const photoPath = await ensureLocal(order.readyPhotoUrl);
       if (photoPath) {
         const r = await safeCall(chat, () =>
           bot.api.sendPhoto(chat, new InputFile(photoPath), { caption: text, parse_mode: 'HTML', reply_markup: kb }),

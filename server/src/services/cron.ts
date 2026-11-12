@@ -54,6 +54,18 @@ async function cleanupOrphanDesigns() {
       removed++;
     }
   }
+  // Bazadagi zaxira nusxalar ham (diskda bo'lmasa ham)
+  const blobs = await prisma.uploadBlob.findMany({
+    where: { path: { startsWith: 'designs/' }, createdAt: { lt: new Date(border) } },
+    select: { path: true },
+  });
+  for (const b of blobs) {
+    const used = await prisma.orderItem.count({ where: { designUrl: `/uploads/${b.path}` } });
+    if (!used) {
+      await removeUpload(`/uploads/${b.path}`);
+      removed++;
+    }
+  }
   if (removed) logger.info({ removed }, 'Ishlatilmagan dizaynlar tozalandi');
 }
 

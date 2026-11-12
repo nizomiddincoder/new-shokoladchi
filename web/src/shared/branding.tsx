@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Store } from 'lucide-react';
 import { get } from './api';
 import { clsx } from './ui';
+import { useImageOk } from './img';
 
 export type Branding = { shopName: string; logoUrl: string | null };
 
@@ -28,8 +29,9 @@ export function useBrandingFavicon(logoUrl: string | null | undefined) {
 
 /** Do'kon logosi: yuklangan bo'lsa rasm, aks holda shokolad rangli belgi */
 export function ShopLogo({ url, className, iconClassName }: { url?: string | null; className?: string; iconClassName?: string }) {
-  if (url) {
-    return <img key={url} src={url} alt="logo" className={clsx('shrink-0 rounded-2xl bg-card object-contain', className)} />;
+  const img = useImageOk(url);
+  if (url && img.ok) {
+    return <img key={url} src={url} alt="logo" onError={img.onError} className={clsx('shrink-0 rounded-2xl bg-card object-contain', className)} />;
   }
   return (
     <span className={clsx('flex shrink-0 items-center justify-center rounded-2xl bg-primary text-white', className)}>

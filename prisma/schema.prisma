@@ -403,6 +403,16 @@ model Broadcast {
   finishedAt DateTime?
 }
 
+/// Yuklangan rasmlarning zaxira nusxasi. Railway'da disk (Volume ulanmagan bo'lsa) har deploy'da
+/// tozalanadi — rasm diskda topilmasa shu yerdan beriladi va diskka qayta yoziladi.
+model UploadBlob {
+  /// "/uploads/..." dan keyingi qism, masalan "products/abc.webp"
+  path      String   @id
+  mime      String
+  data      Bytes
+  createdAt DateTime @default(now())
+}
+
 model AuditLog {
   id         Int      @id @default(autoincrement())
   userId     Int?
