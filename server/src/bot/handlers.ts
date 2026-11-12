@@ -13,13 +13,12 @@ import { saveImage } from '../services/storage';
 import {
   acceptOrder,
   cancelOrder,
-  courierDelivered,
-  courierOnTheWay,
-  courierTake,
   handOver,
   isHttpError,
   loadOrder,
+  markDelivered,
   markReady,
+  sendByTaxi,
   startPreparing,
   type OrderActor,
 } from '../services/orders';
@@ -317,7 +316,7 @@ export function registerHandlers() {
   });
 
   // ---------- Buyurtma tugmalari (guruh va shaxsiy chat) ----------
-  bot.callbackQuery(/^o:(acc|prep|ready|cancel|hand|take|way|dlv):(\d+)$/, async (ctx) => {
+  bot.callbackQuery(/^o:(acc|prep|ready|cancel|hand|way|dlv):(\d+)$/, async (ctx) => {
     const action = ctx.match[1];
     const orderId = Number(ctx.match[2]);
     const from = ctx.from;
@@ -334,9 +333,8 @@ export function registerHandlers() {
       ready: ['SELLER', 'ADMIN'],
       cancel: ['SELLER', 'ADMIN'],
       hand: ['SELLER', 'ADMIN'],
-      take: ['COURIER', 'ADMIN'],
-      way: ['COURIER', 'ADMIN'],
-      dlv: ['COURIER', 'ADMIN'],
+      way: ['SELLER', 'ADMIN'],
+      dlv: ['SELLER', 'ADMIN'],
     };
     if (!staffRoles[action].includes(user.role)) {
       return ctx.answerCallbackQuery({ text: t(lang, 'not_allowed'), show_alert: true });
@@ -381,17 +379,12 @@ export function registerHandlers() {
           await handOver(orderId, actor);
           await ctx.editMessageReplyMarkup().catch(() => undefined);
           return ctx.answerCallbackQuery(t(lang, 'done'));
-        case 'take': {
-          const order = await courierTake(orderId, actor);
-          await ctx.answerCallbackQuery(t(lang, 'courier_assigned_you', { number: order.number }).replace(/<[^>]+>/g, ''));
-          return undefined;
-        }
         case 'way':
-          await courierOnTheWay(orderId, actor);
+          await sendByTaxi(orderId, actor);
           await ctx.editMessageReplyMarkup().catch(() => undefined);
           return ctx.answerCallbackQuery(t(lang, 'done'));
         case 'dlv':
-          await courierDelivered(orderId, actor);
+          await markDelivered(orderId, actor);
           await ctx.editMessageReplyMarkup().catch(() => undefined);
           return ctx.answerCallbackQuery(t(lang, 'done'));
       }
@@ -400,7 +393,6 @@ export function registerHandlers() {
         let msg = err.message;
         const by = (err.details as { by?: string } | undefined)?.by;
         if (err.code === 'ALREADY_ACCEPTED') msg = t(lang, 'already_accepted', { name: by || '-' });
-        else if (err.code === 'ALREADY_TAKEN') msg = t(lang, 'already_taken', { name: by || '-' });
         else if (err.code === 'WRONG_STATUS') msg = t(lang, 'wrong_status');
         else if (err.status === 403) msg = t(lang, 'not_allowed');
         return ctx.answerCallbackQuery({ text: msg.slice(0, 190), show_alert: true });

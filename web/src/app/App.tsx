@@ -13,7 +13,6 @@ import { MeContext } from './meContext';
 // Xodim va admin qismlari alohida yuklanadi (mijoz uchun ilova yengil bo'lsin)
 const SellerApp = lazy(() => import('./staff/SellerApp').then((m) => ({ default: m.SellerApp })));
 const WarehouseApp = lazy(() => import('./staff/WarehouseApp').then((m) => ({ default: m.WarehouseApp })));
-const CourierApp = lazy(() => import('./staff/CourierApp').then((m) => ({ default: m.CourierApp })));
 const AdminMiniApp = lazy(() => import('./staff/AdminMiniApp').then((m) => ({ default: m.AdminMiniApp })));
 
 export function App() {
@@ -81,8 +80,6 @@ export function App() {
         <SellerApp />
       ) : m.role === 'WAREHOUSE' ? (
         <WarehouseApp />
-      ) : m.role === 'COURIER' ? (
-        <CourierApp />
       ) : m.role === 'ADMIN' ? (
         <AdminMiniApp />
       ) : (

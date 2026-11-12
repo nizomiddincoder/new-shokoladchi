@@ -1,5 +1,5 @@
 export type Lang = 'uz' | 'ru';
-export type Role = 'CUSTOMER' | 'SELLER' | 'WAREHOUSE' | 'COURIER' | 'ADMIN';
+export type Role = 'CUSTOMER' | 'SELLER' | 'WAREHOUSE' | 'ADMIN';
 export type Unit = 'PIECE' | 'KG' | 'GRAM' | 'LITER' | 'BOX' | 'PACK';
 export type OrderStatus = 'NEW' | 'ACCEPTED' | 'PREPARING' | 'READY' | 'ON_THE_WAY' | 'DELIVERED' | 'PICKED_UP' | 'CANCELLED';
 export type DeliveryType = 'PICKUP' | 'DELIVERY';
@@ -163,12 +163,10 @@ export type Order = {
   deliveredAt: string | null;
   cancelledAt: string | null;
   sellerId: number | null;
-  courierId: number | null;
   customerId: number;
   items: OrderItem[];
   customer?: PersonRef;
   seller?: PersonRef | null;
-  courier?: PersonRef | null;
   history?: AuditEntry[];
 };
 

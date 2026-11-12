@@ -77,7 +77,8 @@ function buildApp() {
   app.get('/api/public/branding', async (_req, res, next) => {
     try {
       const s = await getSettings();
-      res.setHeader('Cache-Control', 'public, max-age=60');
+      // Logo almashtirilganda darhol ko'rinishi uchun keshlanmaydi
+      res.setHeader('Cache-Control', 'no-cache');
       res.json({ shopName: s.shopName, logoUrl: s.logoUrl });
     } catch (e) {
       next(e);

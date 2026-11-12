@@ -2,8 +2,8 @@
 
 Bitta loyiha ichida quyidagilar bor:
 
-- **Telegram bot**: ro'yxatdan o'tish, buyurtma bildirishnomalari, guruhda buyurtmani qabul qilish, kuryerlar bilan ishlash
-- **Mini App** (`/app`): mijozlar uchun do'kon, sotuvchi, omborchi, kuryer va admin ekranlari (rolga qarab)
+- **Telegram bot**: ro'yxatdan o'tish, buyurtma bildirishnomalari, guruhda buyurtmani qabul qilish
+- **Mini App** (`/app`): mijozlar uchun do'kon, sotuvchi, omborchi va admin ekranlari (rolga qarab)
 - **Web admin panel** (`/admin`): brauzerda login/parol bilan
 - **AI rasm**: mahsulot rasmi Google Gemini yordamida chiroyli studiya fonli rasmga aylantiriladi
 
@@ -81,7 +81,6 @@ Ilova servisi → **Variables** → **Raw Editor** orqali bir yo'la qo'shish mum
 | `ADMIN_WEB_PASSWORD` | ha | Web panel paroli (kamida 6, tavsiya 12+ belgi). Server start'da bcrypt bilan shifrlab bazaga yozadi |
 | `JWT_SECRET` | ha | Kamida 32 belgili tasodifiy matn. Masalan istalgan parol generatoridan 40 belgili parol |
 | `ORDERS_GROUP_CHAT_ID` | ha | Buyurtmalar guruhi ID'si, `-100` bilan boshlanadi (3-bo'lim) |
-| `COURIERS_GROUP_CHAT_ID` | yo'q | Kuryerlar guruhi ID'si. Bo'sh bo'lsa, har bir faol kuryerga shaxsiy xabar boradi |
 | `GEMINI_API_KEY` | yo'q | Google AI Studio kaliti (4-bo'lim). Bo'lmasa AI o'chiq, original rasm ishlatiladi |
 | `GEMINI_IMAGE_MODEL` | yo'q | Standart: `gemini-2.5-flash-image` |
 | `GEMINI_TEXT_MODEL` | yo'q | O'zbekcha → ruscha avtomatik tarjima modeli. Standart: `gemini-2.5-flash` |
@@ -135,7 +134,6 @@ Server har ishga tushganda o'zi:
    - **@RawDataBot** yoki **@getidsbot** ni vaqtincha guruhga qo'shing — u guruh ma'lumotini yuboradi. `"chat": {"id": -1001234567890 ...}` dagi raqam kerak. Keyin bu botni guruhdan chiqaring.
    - Yoki Telegram Web (web.telegram.org/a) da guruhni oching: manzil satrida `#-1234567890` ko'rinadi. Oldiga `-100` qo'shing → `-1001234567890` (agar raqam allaqachon `-100` bilan boshlansa, o'zgartirmang).
 5. Shu raqamni `ORDERS_GROUP_CHAT_ID` ga yozing.
-6. (Ixtiyoriy) Kuryerlar uchun ham xuddi shunday alohida guruh yaratib, `COURIERS_GROUP_CHAT_ID` ga yozing.
 
 Guruhda "Qabul qilish" tugmasini faqat ro'yxatdan o'tgan va bloklanmagan **sotuvchi yoki admin** bosa oladi. Bir vaqtda ikki kishi bossa — faqat birinchisi yutadi, ikkinchisiga "Buyurtmani allaqachon X qabul qilgan" chiqadi.
 
@@ -197,7 +195,7 @@ Gemini yana ikki ishni bajaradi:
 ## 6. Xodim qo'shish
 
 1. Admin panel → **Xodimlar** → **Xodim taklif qilish**.
-2. Xodim ismini yozing va rolini tanlang: **Sotuvchi**, **Omborchi** yoki **Kuryer**.
+2. Xodim ismini yozing va rolini tanlang: **Sotuvchi** yoki **Omborchi**.
 3. Tizim bir martalik link beradi: `https://t.me/BOTINGIZ?start=inv_...` va QR kod. **Nusxa olish** tugmasi bilan linkni xodimga yuboring (yoki QR'ni skanerlatib bering).
 4. Xodim linkni bosadi → botda `/start` → **"Raqamni ulashish"** tugmasini bosadi → tayyor, u shu rol bilan qo'shildi.
 
@@ -211,7 +209,7 @@ Qoidalar:
 2. Sotuvchi qabul qiladi → shaxsiy chatida karta: "Tayyorlashni boshlash", "Tayyor", "Bekor qilish".
 3. Kg/gramm mahsulotlarda sotuvchi mini app'da aniq og'irlikni kiritadi → summa qayta hisoblanadi.
 4. "Tayyor" → bot rasm so'raydi → sotuvchi kamera bilan rasm yuboradi (rasmsiz "Tayyor" bo'lmaydi) → mijozga rasm va yakuniy summa boradi.
-5. Yetkazish: kuryerlarga "Olib ketaman" → "Yo'lga chiqdim" → "Yetkazildi". Olib ketish: sotuvchi "Topshirildi" bosadi.
+5. Yetkazish (kuryer yo'q, mijoz lokatsiyasi bo'yicha taksi orqali): sotuvchi "Taksiga berildi" → "Yetkazildi" bosadi. Olib ketish: sotuvchi "Topshirildi" bosadi.
 6. Buyurtma `acceptTimeoutMinutes` (standart 10 daqiqa) ichida qabul qilinmasa, guruhga va adminga ogohlantirish boradi.
 7. Har kuni 09:00 da omborchi va adminga kam qolgan mahsulotlar ro'yxati keladi.
 
@@ -282,4 +280,4 @@ Mini app'ni Telegram ichida sinash uchun HTTPS kerak (masalan ngrok/cloudflared 
 - Web admin: bcrypt, JWT httpOnly cookie (`SameSite=Strict`), 5 xato urinishdan keyin 15 daqiqa blok.
 - Webhook `secret_token` bilan himoyalangan; helmet, rate limit, CORS faqat o'z domeni.
 - Pul summalari butun son (so'm), miqdorlar `Decimal`.
-- Buyurtmani qabul qilish va kuryer biriktirish atomar `UPDATE ... WHERE status = ...` bilan (race condition'dan himoya).
+- Buyurtmani qabul qilish atomar `UPDATE ... WHERE status = ...` bilan (race condition'dan himoya).

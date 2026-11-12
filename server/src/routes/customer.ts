@@ -9,6 +9,7 @@ import { cancelOrder, createOrder, validateQty } from '../services/orders';
 import { setMenuButtonFor } from '../bot/handlers';
 import { designUpload } from '../lib/upload';
 import { saveJpeg } from '../services/storage';
+import { aiEnabled, cutoutSubject } from '../services/ai';
 
 export const customerRouter = Router();
 customerRouter.use(requireTgUser);
@@ -127,7 +128,6 @@ customerRouter.post(
 
 const ORDER_INCLUDE = {
   items: { orderBy: { id: 'asc' as const }, include: { product: { include: { images: { orderBy: { sortOrder: 'asc' as const }, take: 1 } } } } },
-  courier: { select: { firstName: true, lastName: true, phone: true } },
 };
 
 function customerOrderDto(o: any) {
@@ -148,7 +148,6 @@ function customerOrderDto(o: any) {
     })),
     groupChatId: undefined,
     groupMessageId: undefined,
-    courierMsgs: undefined,
   };
 }
 
@@ -179,6 +178,35 @@ customerRouter.post(
     if (!req.file) throw badRequest('NO_FILE', 'Rasm topilmadi');
     const saved = await saveJpeg(req.file.buffer, 'designs', { maxSize: 4000, quality: 95 });
     res.status(201).json({ url: saved.url, width: saved.width, height: saved.height });
+  }),
+);
+
+/**
+ * "Mening shokoladim": AI mijoz rasmidan odamni qirqib oladi (shaffof fonli PNG).
+ * Natija saqlanmaydi — to'g'ridan-to'g'ri qaytariladi, dizayn mijoz telefonida yig'iladi.
+ */
+const cutoutHits = new Map<number, number[]>();
+const CUTOUT_LIMIT = 15; // soatiga
+customerRouter.post(
+  '/personal/cutout',
+  designUpload.single('file'),
+  ah(async (req, res) => {
+    if (!req.file) throw badRequest('NO_FILE', 'Rasm topilmadi');
+    if (!aiEnabled()) throw badRequest('AI_DISABLED', 'AI hozircha o\'chirilgan');
+    const now = Date.now();
+    const hits = (cutoutHits.get(uid(req)) || []).filter((t) => now - t < 3600_000);
+    if (hits.length >= CUTOUT_LIMIT) throw badRequest('TOO_MANY', 'Juda ko\'p urinish, birozdan keyin qayta urinib ko\'ring');
+    hits.push(now);
+    cutoutHits.set(uid(req), hits);
+    let png: Buffer;
+    try {
+      png = await cutoutSubject(req.file.buffer);
+    } catch (e) {
+      throw badRequest('CUTOUT_FAILED', (e as Error).message || 'Fonni olib tashlab bo\'lmadi');
+    }
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(png);
   }),
 );
 

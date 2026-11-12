@@ -12,7 +12,6 @@ enum Role {
   CUSTOMER
   SELLER
   WAREHOUSE
-  COURIER
   ADMIN
 }
 
@@ -111,7 +110,6 @@ model User {
 
   orders          Order[]         @relation("CustomerOrders")
   sellerOrders    Order[]         @relation("SellerOrders")
-  courierOrders   Order[]         @relation("CourierOrders")
   cartItems       CartItem[]
   favorites       Favorite[]
   stockMovements  StockMovement[]
@@ -272,15 +270,11 @@ model Order {
   initialTotal      Int
   sellerId          Int?
   seller            User?        @relation("SellerOrders", fields: [sellerId], references: [id])
-  courierId         Int?
-  courier           User?        @relation("CourierOrders", fields: [courierId], references: [id])
   readyPhotoUrl     String?
   cancelReason      String?
   cancelledBy       String?
   groupChatId       String?
   groupMessageId    Int?
-  /// Kuryerlarga yuborilgan xabarlar: [{chatId, messageId}]
-  courierMsgs       Json?
   timeoutNotifiedAt DateTime?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
@@ -296,7 +290,6 @@ model Order {
   @@index([customerId])
   @@index([createdAt])
   @@index([sellerId])
-  @@index([courierId])
 }
 
 model OrderItem {

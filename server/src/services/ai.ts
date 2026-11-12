@@ -290,6 +290,196 @@ export async function resumePendingAi() {
   if (pending.length) logger.info({ count: pending.length }, 'AI navbati tiklandi');
 }
 
+// ================= "MENING SHOKOLADIM": FONNI OLIB TASHLASH =================
+
+const CUTOUT_TIMEOUT_MS = 60_000;
+const CUTOUT_MAX = 1400;
+/** Kalit rang: odamlar suratida deyarli uchramaydigan sof magenta */
+const KEY_PROMPT = [
+  'Cut out the main subject(s) of this photo — the person or people (with their full hair), or pets / the main foreground object if there are no people.',
+  'Replace the ENTIRE background with one perfectly flat, uniform, solid pure magenta color (#FF00FF): no gradient, no shadow, no texture, no vignette, no floor, no other objects.',
+  'Keep the subject absolutely identical to the original: same face and identity, expression, pose, clothes, colors, lighting and proportions. Do not beautify, do not redraw, do not add or remove anything, do not crop the subject.',
+  'Keep the same framing and composition as the original photo. Edges must be clean, smooth and precise, especially around hair and shoulders.',
+].join(' ');
+
+/** Rasm nisbatiga eng yaqin Gemini formatini tanlaydi */
+function nearestAspect(w: number, h: number) {
+  const options: [string, number][] = [
+    ['1:1', 1],
+    ['3:4', 3 / 4],
+    ['4:3', 4 / 3],
+    ['9:16', 9 / 16],
+    ['16:9', 16 / 9],
+    ['2:3', 2 / 3],
+    ['3:2', 3 / 2],
+  ];
+  const r = w / h;
+  return options.reduce((best, o) => (Math.abs(Math.log(o[1] / r)) < Math.abs(Math.log(best[1] / r)) ? o : best))[0];
+}
+
+/**
+ * Magenta fonni shaffoflikka aylantiradi:
+ *  1) chetlardan boshlab kuchli magenta piksellarni "flood fill" bilan fon deb belgilaymiz
+ *     (ichkaridagi binafsha kiyim kabi narsalar saqlanib qoladi);
+ *  2) juda sof magenta (masalan qo'l va tana orasidagi bo'shliq) ham fon;
+ *  3) fonga tegib turgan chet piksellar yumshoq shaffof bo'ladi va pushti "dog'" olib tashlanadi.
+ */
+export async function magentaToAlpha(input: Buffer) {
+  const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width: w, height: h } = info;
+  const n = w * h;
+  const m = new Int16Array(n); // magenta kuchi: min(r,b) - g
+  for (let i = 0; i < n; i++) {
+    const o = i * 4;
+    m[i] = Math.min(data[o], data[o + 2]) - data[o + 1];
+  }
+  const SEED = 110;
+  const PURE = 190;
+  const bg = new Uint8Array(n);
+  const stack: number[] = [];
+  const push = (i: number) => {
+    if (!bg[i] && m[i] > SEED) {
+      bg[i] = 1;
+      stack.push(i);
+    }
+  };
+  for (let x = 0; x < w; x++) {
+    push(x);
+    push((h - 1) * w + x);
+  }
+  for (let y = 0; y < h; y++) {
+    push(y * w);
+    push(y * w + w - 1);
+  }
+  while (stack.length) {
+    const i = stack.pop()!;
+    const x = i % w;
+    if (x > 0) push(i - 1);
+    if (x < w - 1) push(i + 1);
+    if (i >= w) push(i - w);
+    if (i < n - w) push(i + w);
+  }
+  for (let i = 0; i < n; i++) if (m[i] > PURE) bg[i] = 1;
+
+  // Fonga yaqin (2 px) piksellar — chet zonasi
+  const near = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (!bg[i]) continue;
+    const x = i % w;
+    const y = (i - x) / w;
+    for (let dy = -2; dy <= 2; dy++) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= h) continue;
+      for (let dx = -2; dx <= 2; dx++) {
+        const xx = x + dx;
+        if (xx >= 0 && xx < w) near[yy * w + xx] = 1;
+      }
+    }
+  }
+
+  const alpha = Buffer.alloc(n);
+  const rgb = Buffer.alloc(n * 3);
+  for (let i = 0; i < n; i++) {
+    const o = i * 4;
+    let r = data[o];
+    const g = data[o + 1];
+    let b = data[o + 2];
+    let a = 255;
+    if (bg[i]) a = 0;
+    else if (near[i] && m[i] > 30) {
+      // Chet: magenta qancha ko'p bo'lsa, shuncha shaffof; rang "tozalanadi"
+      a = Math.round(255 * Math.max(0, Math.min(1, (PURE - m[i]) / (PURE - 30))));
+      r = Math.max(g, r - m[i]);
+      b = Math.max(g, b - m[i]);
+    }
+    alpha[i] = a;
+    rgb[i * 3] = r;
+    rgb[i * 3 + 1] = g;
+    rgb[i * 3 + 2] = b;
+  }
+  return { rgb, alpha, w, h };
+}
+
+/**
+ * Mijoz rasmidan odam(lar)ni qirqib oladi va shaffof fonli PNG qaytaradi.
+ * Bo'sh chetlar kesiladi; rasm chetiga tegib turgan joylar (masalan yelka) yumshoq so'nib boradi —
+ * shablonga qo'yilganda tekis kesilgan chiziq ko'rinmaydi.
+ */
+export async function cutoutSubject(input: Buffer): Promise<Buffer> {
+  if (!client) throw new Error('AI o\'chirilgan: GEMINI_API_KEY o\'rnatilmagan');
+  const src = await sharp(input).rotate().resize(1536, 1536, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 90 }).toBuffer();
+  const meta = await sharp(src).metadata();
+  const started = Date.now();
+  try {
+    const response = await withTimeout(
+      client.models.generateContent({
+        model: env.GEMINI_IMAGE_MODEL,
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data: src.toString('base64') } }, { text: KEY_PROMPT }] }],
+        config: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { aspectRatio: nearestAspect(meta.width || 1, meta.height || 1) } },
+      }),
+      CUTOUT_TIMEOUT_MS,
+    );
+    const out = (response.candidates?.[0]?.content?.parts ?? []).find((p) => p.inlineData?.data);
+    if (!out?.inlineData?.data) throw new Error('Gemini rasm qaytarmadi');
+
+    const { rgb, alpha, w, h } = await magentaToAlpha(Buffer.from(out.inlineData.data, 'base64'));
+
+    // Ob'ekt chegarasi (bo'sh shaffof chetlarni kesish uchun)
+    let minX = w, minY = h, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (alpha[y * w + x] > 24) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0 || (maxX - minX) * (maxY - minY) < w * h * 0.02) throw new Error('Rasmda odam topilmadi');
+
+    // Chetga tegib turgan tomonlar yumshoq so'nadi (tekis kesilgan chiziq qolmasin)
+    const fadeEdge = (touch: boolean, len: number, fn: (k: number, t: number) => void) => {
+      if (!touch || len < 4) return;
+      for (let k = 0; k < len; k++) fn(k, (k + 1) / (len + 1));
+    };
+    const fy = Math.round(h * 0.09);
+    const fx = Math.round(w * 0.05);
+    fadeEdge(maxY >= h - 3, fy, (k, t) => {
+      const y = h - 1 - k;
+      for (let x = 0; x < w; x++) alpha[y * w + x] = Math.round(alpha[y * w + x] * t);
+    });
+    fadeEdge(minX <= 2, fx, (k, t) => {
+      for (let y = 0; y < h; y++) alpha[y * w + k] = Math.round(alpha[y * w + k] * t);
+    });
+    fadeEdge(maxX >= w - 3, fx, (k, t) => {
+      const x = w - 1 - k;
+      for (let y = 0; y < h; y++) alpha[y * w + x] = Math.round(alpha[y * w + x] * t);
+    });
+
+    // Chetlarni biroz silliqlash
+    const softAlpha = await sharp(alpha, { raw: { width: w, height: h, channels: 1 } }).blur(0.6).raw().toBuffer();
+    const pad = 4;
+    const left = Math.max(0, minX - pad);
+    const top = Math.max(0, minY - pad);
+    const png = await sharp(rgb, { raw: { width: w, height: h, channels: 3 } })
+      .joinChannel(softAlpha, { raw: { width: w, height: h, channels: 1 } })
+      .extract({ left, top, width: Math.min(w, maxX + pad + 1) - left, height: Math.min(h, maxY + pad + 1) - top })
+      .resize(CUTOUT_MAX, CUTOUT_MAX, { fit: 'inside', withoutEnlargement: true })
+      .png({ compressionLevel: 8 })
+      .toBuffer();
+    await prisma.aiCall.create({ data: { model: env.GEMINI_IMAGE_MODEL, success: true, durationMs: Date.now() - started } });
+    return png;
+  } catch (err) {
+    const message = (err as Error)?.message?.slice(0, 500) || 'Noma\'lum xato';
+    await prisma.aiCall
+      .create({ data: { model: env.GEMINI_IMAGE_MODEL, success: false, error: `cutout: ${message}`, durationMs: Date.now() - started } })
+      .catch(() => undefined);
+    logger.warn({ err: message }, 'Fonni olib tashlab bo\'lmadi');
+    throw new Error(message);
+  }
+}
+
 export async function aiMonthlyStats() {
   const ym = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tashkent', year: 'numeric', month: '2-digit' }).format(new Date());
   const monthStart = new Date(`${ym}-01T00:00:00+05:00`);

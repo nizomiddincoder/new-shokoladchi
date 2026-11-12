@@ -7,7 +7,7 @@ import { get, post } from '../../shared/api';
 import type { Order } from '../../shared/types';
 import { Button, Card, Empty, ErrorState, PageLoader, ReasonModal, Skeleton, useToast } from '../../shared/ui';
 import { OrderItemsList, OrderTimeline, OrderTotals, ProductThumb, StatusBadge } from '../../shared/orderParts';
-import { dateTime, money, personName, phoneHref, prettyPhone } from '../../shared/format';
+import { dateTime, money } from '../../shared/format';
 import { PageHeader, Screen, TopTitle } from '../layout';
 import { DesignBlock } from '../../shared/DesignBlock';
 
@@ -113,17 +113,6 @@ export function OrderDetailPage() {
             </div>
             <StatusBadge status={o.status} />
           </div>
-          {o.courier && (
-            <div className="mt-3 flex items-center justify-between rounded-xl bg-surface px-3 py-2 text-[13px]">
-              <div>
-                <span className="text-muted">{t('orders.courier')}: </span>
-                <span className="font-semibold">{personName(o.courier)}</span>
-              </div>
-              {phoneHref(o.courier.phone) && (
-                <a href={phoneHref(o.courier.phone)} className="font-bold text-primary">{prettyPhone(o.courier.phone)}</a>
-              )}
-            </div>
-          )}
         </Card>
 
         <DesignBlock order={o} download={false} />

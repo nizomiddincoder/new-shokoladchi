@@ -9,15 +9,11 @@ import { audit } from '../lib/audit';
 import {
   ORDER_FULL,
   type OrderFull,
-  dispatchToCouriers,
   fullName,
-  notifyCustomerCourierAssigned,
   notifyCustomerCreated,
   notifyCustomerStatus,
   notifyStaffCancelled,
-  refreshCourierOffers,
   refreshGroupMessage,
-  sendCourierCard,
   sendNewOrderToGroup,
   sendSellerCard,
 } from '../bot/notify';
@@ -344,8 +340,7 @@ export async function markReady(orderId: number, actor: OrderActor, photoUrl: st
   background('ready', async () => {
     await refreshGroupMessage(order);
     await notifyCustomerStatus(order, 'READY');
-    if (order.deliveryType === 'DELIVERY') await dispatchToCouriers(order);
-    else await sendSellerCard(order);
+    await sendSellerCard(order);
   });
   return order;
 }
@@ -365,57 +360,29 @@ export async function handOver(orderId: number, actor: OrderActor) {
   return order;
 }
 
-export async function courierTake(orderId: number, actor: OrderActor) {
-  if (actor.role !== 'COURIER' && actor.role !== 'ADMIN') throw forbidden();
-  if (!actor.userId) throw forbidden('TG_ONLY', 'Kuryer sifatida faqat Telegram orqali');
-  const ok = await guardedUpdate(
-    orderId,
-    { status: 'READY', deliveryType: 'DELIVERY', courierId: null },
-    { courierId: actor.userId },
-  );
-  const order = await loadOrder(orderId);
-  if (!ok) {
-    if (order.courierId) {
-      throw conflict('ALREADY_TAKEN', `Buyurtmani allaqachon ${fullName(order.courier)} olgan`, { by: fullName(order.courier) });
-    }
-    throw conflict('WRONG_STATUS', 'Bu amal hozirgi holatda mumkin emas');
-  }
-  await audit(actor, 'order.courier_take', 'Order', order.id, null, { courierId: actor.userId });
-  background('take', async () => {
-    await refreshCourierOffers(order);
-    await sendCourierCard(order);
-    await notifyCustomerCourierAssigned(order);
-  });
-  return order;
-}
-
-function assertCourierAccess(order: OrderFull, actor: OrderActor) {
-  if (actor.role === 'ADMIN') return;
-  if (actor.role !== 'COURIER' || order.courierId !== actor.userId) throw forbidden('NOT_YOUR_ORDER', 'Bu buyurtma sizga tegishli emas');
-}
-
-export async function courierOnTheWay(orderId: number, actor: OrderActor) {
+/**
+ * Yetkazish: kuryer yo'q — sotuvchi buyurtmani mijoz lokatsiyasi bo'yicha taksiga beradi.
+ * READY -> ON_THE_WAY ("Taksiga berildi")
+ */
+export async function sendByTaxi(orderId: number, actor: OrderActor) {
   const before = await loadOrder(orderId);
-  assertCourierAccess(before, actor);
-  const ok = await guardedUpdate(
-    orderId,
-    { status: 'READY', deliveryType: 'DELIVERY', courierId: { not: null } },
-    { status: 'ON_THE_WAY', pickedUpAt: new Date() },
-  );
+  assertSellerAccess(before, actor);
+  const ok = await guardedUpdate(orderId, { status: 'READY', deliveryType: 'DELIVERY' }, { status: 'ON_THE_WAY', pickedUpAt: new Date() });
   if (!ok) throw conflict('WRONG_STATUS', 'Bu amal hozirgi holatda mumkin emas');
   const order = await loadOrder(orderId);
   await audit(actor, 'order.on_the_way', 'Order', order.id, { status: 'READY' }, { status: 'ON_THE_WAY' });
   background('onTheWay', async () => {
     await refreshGroupMessage(order);
-    await sendCourierCard(order);
+    await sendSellerCard(order);
     await notifyCustomerStatus(order, 'ON_THE_WAY');
   });
   return order;
 }
 
-export async function courierDelivered(orderId: number, actor: OrderActor) {
+/** ON_THE_WAY -> DELIVERED ("Yetkazildi") */
+export async function markDelivered(orderId: number, actor: OrderActor) {
   const before = await loadOrder(orderId);
-  assertCourierAccess(before, actor);
+  assertSellerAccess(before, actor);
   const ok = await guardedUpdate(orderId, { status: 'ON_THE_WAY' }, { status: 'DELIVERED', deliveredAt: new Date() });
   if (!ok) throw conflict('WRONG_STATUS', 'Bu amal hozirgi holatda mumkin emas');
   await bumpSoldCount(orderId);

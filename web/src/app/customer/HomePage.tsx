@@ -1,10 +1,11 @@
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Camera, Clock, Gift, Search } from 'lucide-react';
 import { get } from '../../shared/api';
 import type { Banner, Category, Product, PublicSettings } from '../../shared/types';
-import { ErrorState, SectionTitle, Skeleton, ThemeToggle } from '../../shared/ui';
+import { ErrorState, SectionTitle, Skeleton, ThemeToggle, clsx } from '../../shared/ui';
 import { CategoryVisual } from '../../shared/icons';
 import { ShopLogo } from '../../shared/branding';
 import { nameOf } from '../../shared/format';
@@ -12,7 +13,114 @@ import { useBackButton } from '../../shared/telegram';
 import { Screen } from '../layout';
 import { ProductCard, ProductGrid, ProductGridSkeleton } from './ProductCard';
 
-type Home = { banners: Banner[]; categories: Category[]; discounted: Product[]; bestsellers: Product[]; newest: Product[]; settings: PublicSettings; personalCount: number };
+const AUTOPLAY_MS = 4000;
+/** Foydalanuvchi o'zi surgandan keyin avtomatik aylanish shuncha kutadi */
+const RESUME_AFTER_MS = 6000;
+
+/**
+ * Bannerlar karuseli: har 4 soniyada keyingisiga o'tadi, oxiridan boshiga qaytadi.
+ * Barmoq bilan surish ham ishlaydi; surilganda avtomatik aylanish biroz to'xtab turadi.
+ */
+function BannerCarousel({ banners, lang, onOpen }: { banners: Banner[]; lang: string; onOpen: (b: Banner) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const indexRef = useRef(0);
+  const pausedUntil = useRef(0);
+  const count = banners.length;
+
+  const goTo = (i: number) => {
+    const el = ref.current;
+    const child = el?.children[i] as HTMLElement | undefined;
+    if (!el || !child) return;
+    el.scrollTo({ left: child.offsetLeft - (el.clientWidth - child.clientWidth) / 2, behavior: 'smooth' });
+  };
+
+  // Joriy bannerni scroll holatidan aniqlaymiz (qo'lda surilganda ham nuqtalar to'g'ri bo'ladi)
+  const onScroll = () => {
+    const el = ref.current;
+    if (!el) return;
+    const center = el.scrollLeft + el.clientWidth / 2;
+    let best = 0;
+    let bestDist = Infinity;
+    Array.from(el.children).forEach((c, i) => {
+      const h = c as HTMLElement;
+      const dist = Math.abs(h.offsetLeft + h.clientWidth / 2 - center);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    });
+    indexRef.current = best;
+    setIndex(best);
+  };
+
+  useEffect(() => {
+    if (count < 2) return;
+    const timer = setInterval(() => {
+      if (Date.now() < pausedUntil.current || document.hidden) return;
+      const next = (indexRef.current + 1) % count;
+      indexRef.current = next;
+      setIndex(next);
+      goTo(next);
+    }, AUTOPLAY_MS);
+    return () => clearInterval(timer);
+  }, [count]);
+
+  const pause = () => {
+    pausedUntil.current = Date.now() + RESUME_AFTER_MS;
+  };
+
+  return (
+    <div className="mt-4">
+      <div
+        ref={ref}
+        onScroll={onScroll}
+        onTouchStart={pause}
+        onPointerDown={pause}
+        onWheel={pause}
+        className="no-scrollbar relative flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth px-4"
+      >
+        {banners.map((b) => {
+          const title = lang === 'ru' ? b.titleRu : b.titleUz;
+          return (
+            <button
+              key={b.id}
+              onClick={() => onOpen(b)}
+              className={clsx(
+                'relative aspect-[2.2/1] shrink-0 snap-center overflow-hidden rounded-2xl bg-primary-soft',
+                count > 1 ? 'w-[88%]' : 'w-full',
+              )}
+            >
+              <img src={b.imageUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+              {title && (
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-4 pb-3 pt-8 text-left text-[16px] font-bold text-white">
+                  {title}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {count > 1 && (
+        <div className="mt-2 flex justify-center gap-1.5">
+          {banners.map((b, i) => (
+            <button
+              key={b.id}
+              onClick={() => {
+                pause();
+                goTo(i);
+              }}
+              aria-label={`${i + 1}`}
+              className={clsx('h-1.5 rounded-full transition-all duration-300', i === index ? 'w-5 bg-primary' : 'w-1.5 bg-line')}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type Home ={ banners: Banner[]; categories: Category[]; discounted: Product[]; bestsellers: Product[]; newest: Product[]; settings: PublicSettings; personalCount: number };
 
 export function HomePage() {
   const { t, i18n } = useTranslation();
@@ -74,20 +182,14 @@ export function HomePage() {
         </div>
       )}
 
-      {/* Bannerlar */}
-      <div className="no-scrollbar mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4">
-        {q.isLoading && <Skeleton className="aspect-[2.2/1] w-[88%] shrink-0 rounded-2xl" />}
-        {d?.banners.map((b) => (
-          <button key={b.id} onClick={() => openBanner(b)} className="relative aspect-[2.2/1] w-[88%] shrink-0 snap-center overflow-hidden rounded-2xl bg-primary-soft">
-            <img src={b.imageUrl} alt="" className="h-full w-full object-cover" />
-            {(i18n.language === 'ru' ? b.titleRu : b.titleUz) && (
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-4 pb-3 pt-8 text-left text-[16px] font-bold text-white">
-                {i18n.language === 'ru' ? b.titleRu : b.titleUz}
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
+      {/* Bannerlar — avtomatik aylanadi */}
+      {q.isLoading ? (
+        <div className="mt-4 px-4">
+          <Skeleton className="aspect-[2.2/1] w-full rounded-2xl" />
+        </div>
+      ) : (
+        !!d?.banners.length && <BannerCarousel banners={d.banners} lang={i18n.language} onOpen={openBanner} />
+      )}
 
       {/* Kategoriyalar */}
       <section className="mt-5 px-4">

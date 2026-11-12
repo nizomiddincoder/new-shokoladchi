@@ -48,7 +48,7 @@ type StaffStats = {
   avgDeliveryMin: number | null;
 };
 
-const ROLES: Role[] = ['SELLER', 'WAREHOUSE', 'COURIER', 'ADMIN'];
+const ROLES: Role[] = ['SELLER', 'WAREHOUSE', 'ADMIN'];
 
 function copyText(text: string) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
@@ -208,7 +208,7 @@ export function StaffPage() {
                     </div>
                   </div>
                   <div className="mt-2 text-[12px] text-muted">
-                    {s.role === 'COURIER' ? `${t('admin.delivered')}: ${s.ordersDelivered}` : s.role === 'SELLER' || s.role === 'ADMIN' ? `${t('admin.accepted')}: ${s.ordersAccepted}` : dateTime(s.createdAt)}
+                    {s.role === 'SELLER' || s.role === 'ADMIN' ? `${t('admin.accepted')}: ${s.ordersAccepted} · ${t('admin.delivered')}: ${s.ordersDelivered}` : dateTime(s.createdAt)}
                   </div>
                 </Card>
               ))}
@@ -266,8 +266,8 @@ export function StaffPage() {
               <input className="input" value={inviteForm.staffName} onChange={(e) => setInviteForm({ ...inviteForm, staffName: e.target.value })} maxLength={60} autoFocus />
             </Field>
             <Field label={t('admin.role')}>
-              <div className="grid grid-cols-3 gap-2">
-                {(['SELLER', 'WAREHOUSE', 'COURIER'] as Role[]).map((r) => (
+              <div className="grid grid-cols-2 gap-2">
+                {(['SELLER', 'WAREHOUSE'] as Role[]).map((r) => (
                   <button
                     key={r}
                     type="button"
@@ -308,10 +308,6 @@ export function StaffPage() {
                     <Stat label={t('common.sum')} value={stats.data ? money(stats.data.revenue) : '—'} />
                     <Stat label={t('admin.avgAccept')} value={stats.data?.avgAcceptMin != null ? `${stats.data.avgAcceptMin} ${t('common.min')}` : '—'} />
                     <Stat label={t('staff.cancelledCount')} value={stats.data?.cancelled ?? '—'} tone="danger" />
-                  </>
-                )}
-                {detail.role === 'COURIER' && (
-                  <>
                     <Stat label={t('admin.delivered')} value={stats.data?.delivered ?? '—'} />
                     <Stat label={t('admin.avgDelivery')} value={stats.data?.avgDeliveryMin != null ? `${stats.data.avgDeliveryMin} ${t('common.min')}` : '—'} />
                   </>

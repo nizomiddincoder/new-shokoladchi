@@ -20,7 +20,6 @@ type Dash = {
   hours: { hour: number; orders: number }[];
   topProducts: { productId: number; name: string; unit: string; qty: number; revenue: number }[];
   sellers: { id: number; name: string; accepted: number; completed: number; revenue: number; avgAcceptMin: number | null }[];
-  couriers: { id: number; name: string; delivered: number; avgDeliveryMin: number | null }[];
 };
 
 const TOOLTIP_STYLE = { background: 'rgb(var(--c-card))', border: '1px solid rgb(var(--c-line))', borderRadius: 12, color: 'rgb(var(--c-ink))' };
@@ -114,7 +113,7 @@ export function DashboardPage() {
               </TableWrap>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div>
               <div>
                 <h3 className="mb-2 text-[15px] font-bold">{t('admin.sellersRating')}</h3>
                 <TableWrap>
@@ -139,34 +138,6 @@ export function DashboardPage() {
                       {d.sellers.length === 0 && (
                         <tr>
                           <td colSpan={4} className="text-center text-muted">{t('common.empty')}</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </TableWrap>
-              </div>
-              <div>
-                <h3 className="mb-2 text-[15px] font-bold">{t('admin.couriersRating')}</h3>
-                <TableWrap>
-                  <table className="tbl">
-                    <thead>
-                      <tr>
-                        <th>{t('admin.courier')}</th>
-                        <th className="text-right">{t('admin.delivered')}</th>
-                        <th className="text-right">{t('admin.avgDelivery')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {d.couriers.map((c) => (
-                        <tr key={c.id}>
-                          <td className="font-semibold">{c.name}</td>
-                          <td className="text-right">{c.delivered}</td>
-                          <td className="text-right">{c.avgDeliveryMin != null ? `${c.avgDeliveryMin} ${t('common.min')}` : '—'}</td>
-                        </tr>
-                      ))}
-                      {d.couriers.length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="text-center text-muted">{t('common.empty')}</td>
                         </tr>
                       )}
                     </tbody>

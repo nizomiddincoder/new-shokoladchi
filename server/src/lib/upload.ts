@@ -11,6 +11,17 @@ export const designUpload = multer({
   },
 });
 
+/** Mahsulotlar importi uchun Excel (.xlsx) fayl */
+export const excelUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.xlsx$/i.test(file.originalname) || /spreadsheetml|excel|octet-stream/.test(file.mimetype);
+    if (!ok) return cb(badRequest('BAD_FILE', 'Faqat Excel (.xlsx) fayl yuklash mumkin'));
+    cb(null, true);
+  },
+});
+
 export const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024, files: 1 },

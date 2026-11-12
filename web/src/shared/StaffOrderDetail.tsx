@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Bike, Camera, CheckCheck, ChefHat, CircleX, HandCoins, PackageCheck, Scale, Truck } from 'lucide-react';
+import { Camera, CarTaxiFront, CheckCheck, ChefHat, CircleX, HandCoins, PackageCheck, Scale } from 'lucide-react';
 import { get, post, upload } from './api';
 import { CameraCapture, cameraSupported } from './CameraCapture';
 import { DesignBlock } from './DesignBlock';
@@ -14,7 +14,6 @@ export function StaffOrderDetail({
   orderId,
   role,
   meId,
-  isWeb,
   fetchPath,
   extra,
 }: {
@@ -42,12 +41,10 @@ export function StaffOrderDetail({
 
   const isSellerSide = role === 'SELLER' || role === 'ADMIN';
   const isMine = role === 'ADMIN' || o.sellerId === meId;
-  const isCourierMine = role === 'ADMIN' || o.courierId === meId;
 
   const refresh = async () => {
     await qc.invalidateQueries({ queryKey: ['staff-order'] });
     await qc.invalidateQueries({ queryKey: ['staff-orders'] });
-    await qc.invalidateQueries({ queryKey: ['courier-orders'] });
     await qc.invalidateQueries({ queryKey: ['admin-orders'] });
     await qc.invalidateQueries({ queryKey: ['staff-stats'] });
   };
@@ -99,20 +96,12 @@ export function StaffOrderDetail({
           </div>
           <StatusBadge status={o.status} />
         </div>
-        {(o.seller || o.courier) && (
+        {o.seller && (
           <div className="mt-3 grid grid-cols-2 gap-2 text-[13px]">
-            {o.seller && (
-              <div className="rounded-xl bg-surface px-3 py-2">
-                <div className="text-[11px] font-semibold text-muted">{t('orders.seller')}</div>
-                <div className="font-semibold">{personName(o.seller)}</div>
-              </div>
-            )}
-            {o.courier && (
-              <div className="rounded-xl bg-surface px-3 py-2">
-                <div className="text-[11px] font-semibold text-muted">{t('orders.courier')}</div>
-                <div className="font-semibold">{personName(o.courier)}</div>
-              </div>
-            )}
+            <div className="rounded-xl bg-surface px-3 py-2">
+              <div className="text-[11px] font-semibold text-muted">{t('orders.seller')}</div>
+              <div className="font-semibold">{personName(o.seller)}</div>
+            </div>
           </div>
         )}
       </Card>
@@ -205,18 +194,14 @@ export function StaffOrderDetail({
             {t('staff.handover')}
           </Button>
         )}
-        {(role === 'COURIER' || (role === 'ADMIN' && !isWeb)) && o.status === 'READY' && o.deliveryType === 'DELIVERY' && !o.courierId && (
-          <Button block size="lg" icon={Bike} loading={busy === 'take'} onClick={() => run('take', () => post(`/staff/courier/orders/${o.id}/take`))}>
-            {t('staff.take')}
-          </Button>
-        )}
-        {(role === 'COURIER' || role === 'ADMIN') && isCourierMine && o.status === 'READY' && o.courierId && (
-          <Button block size="lg" icon={Truck} loading={busy === 'way'} onClick={() => run('way', () => post(`/staff/courier/orders/${o.id}/on-the-way`))}>
+        {/* Yetkazish: mijoz lokatsiyasi bo'yicha taksiga beriladi */}
+        {isSellerSide && isMine && o.status === 'READY' && o.deliveryType === 'DELIVERY' && (
+          <Button block size="lg" icon={CarTaxiFront} loading={busy === 'way'} onClick={() => run('way', () => post(`/staff/orders/${o.id}/on-the-way`))}>
             {t('staff.onTheWay')}
           </Button>
         )}
-        {(role === 'COURIER' || role === 'ADMIN') && isCourierMine && o.status === 'ON_THE_WAY' && (
-          <Button block size="lg" variant="success" icon={CheckCheck} loading={busy === 'dlv'} onClick={() => run('dlv', () => post(`/staff/courier/orders/${o.id}/delivered`))}>
+        {isSellerSide && isMine && o.status === 'ON_THE_WAY' && (
+          <Button block size="lg" variant="success" icon={CheckCheck} loading={busy === 'dlv'} onClick={() => run('dlv', () => post(`/staff/orders/${o.id}/delivered`))}>
             {t('staff.delivered')}
           </Button>
         )}

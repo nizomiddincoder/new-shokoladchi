@@ -7,7 +7,8 @@ import { prisma, getSettings } from '../db';
 import { ah, badRequest, forbidden, notFound } from '../lib/errors';
 import { requireRole, isEnvAdmin } from '../lib/auth';
 import { audit } from '../lib/audit';
-import { imageUpload } from '../lib/upload';
+import { excelUpload, imageUpload } from '../lib/upload';
+import { buildProductsWorkbook, importProducts } from '../services/productExcel';
 import { escapeHtml, toNum } from '../lib/format';
 import { STAFF_ORDER_INCLUDE, staffOrderDto } from './staff';
 import { removeUpload, saveImage, saveJpeg, type Folder } from '../services/storage';
@@ -46,7 +47,6 @@ adminRouter.get(
         status: z.enum(['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'ON_THE_WAY', 'DELIVERED', 'PICKED_UP', 'CANCELLED', 'ACTIVE']).optional(),
         deliveryType: z.enum(['PICKUP', 'DELIVERY']).optional(),
         sellerId: z.coerce.number().int().optional(),
-        courierId: z.coerce.number().int().optional(),
         customerId: z.coerce.number().int().optional(),
         from: z.string().optional(),
         to: z.string().optional(),
@@ -60,7 +60,6 @@ adminRouter.get(
     else if (q.status) where.status = q.status;
     if (q.deliveryType) where.deliveryType = q.deliveryType;
     if (q.sellerId) where.sellerId = q.sellerId;
-    if (q.courierId) where.courierId = q.courierId;
     if (q.customerId) where.customerId = q.customerId;
     if (q.from || q.to) {
       const { start, end } = resolveRange('custom', q.from || q.to, q.to || q.from);
@@ -339,8 +338,45 @@ adminRouter.post(
   }),
 );
 
+// ---------- Excel: bir tugma bilan yuklab olish va import ----------
+adminRouter.get(
+  '/products/excel',
+  ah(async (req, res) => {
+    const { buffer, filename } = await buildProductsWorkbook();
+    await audit(req.actor!, 'export', 'products-excel', null);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }),
+);
+
+adminRouter.post(
+  '/products/excel/send',
+  ah(async (req, res) => {
+    const user = req.actor!.user;
+    if (!user) throw badRequest('TG_ONLY', 'Faqat Telegram orqali');
+    const { buffer, filename } = await buildProductsWorkbook();
+    const r = await safeCall(user.telegramId, () => bot.api.sendDocument(String(user.telegramId), new InputFile(buffer, filename), { caption: filename }));
+    if (!r.ok) throw badRequest('SEND_FAILED', 'Fayl yuborilmadi: ' + r.error);
+    res.json({ ok: true, filename });
+  }),
+);
+
+adminRouter.post(
+  '/products/import',
+  excelUpload.single('file'),
+  ah(async (req, res) => {
+    if (!req.file) throw badRequest('NO_FILE', 'Excel fayl tanlanmagan');
+    try {
+      res.json(await importProducts(req.file.buffer, req.actor!));
+    } catch (e) {
+      throw badRequest('IMPORT_FAILED', (e as Error).message);
+    }
+  }),
+);
+
 // ================= XODIMLAR =================
-const STAFF_ROLES = ['SELLER', 'WAREHOUSE', 'COURIER', 'ADMIN'] as const;
+const STAFF_ROLES = ['SELLER', 'WAREHOUSE', 'ADMIN'] as const;
 
 adminRouter.get(
   '/staff',
@@ -349,9 +385,9 @@ adminRouter.get(
       where: { role: { in: [...STAFF_ROLES] } },
       orderBy: [{ role: 'asc' }, { firstName: 'asc' }],
     });
-    const [sellerAgg, courierAgg] = await Promise.all([
+    const [sellerAgg, deliveredAgg] = await Promise.all([
       prisma.order.groupBy({ by: ['sellerId'], where: { sellerId: { not: null } }, _count: { _all: true } }),
-      prisma.order.groupBy({ by: ['courierId'], where: { courierId: { not: null }, status: 'DELIVERED' }, _count: { _all: true } }),
+      prisma.order.groupBy({ by: ['sellerId'], where: { sellerId: { not: null }, status: 'DELIVERED' }, _count: { _all: true } }),
     ]);
     res.json(
       users.map((u) => ({
@@ -366,7 +402,7 @@ adminRouter.get(
         isMainAdmin: isEnvAdmin(u.telegramId),
         createdAt: u.createdAt,
         ordersAccepted: sellerAgg.find((a) => a.sellerId === u.id)?._count._all || 0,
-        ordersDelivered: courierAgg.find((a) => a.courierId === u.id)?._count._all || 0,
+        ordersDelivered: deliveredAgg.find((a) => a.sellerId === u.id)?._count._all || 0,
       })),
     );
   }),
@@ -386,14 +422,14 @@ adminRouter.get(
       prisma.order.count({ where: { sellerId: id, acceptedAt: range, status: { in: ['DELIVERED', 'PICKED_UP'] } } }),
       prisma.order.count({ where: { sellerId: id, acceptedAt: range, status: 'CANCELLED' } }),
       prisma.order.aggregate({ where: { sellerId: id, acceptedAt: range, status: { in: ['DELIVERED', 'PICKED_UP'] } }, _sum: { finalTotal: true } }),
-      prisma.order.count({ where: { courierId: id, status: 'DELIVERED', deliveredAt: range } }),
+      prisma.order.count({ where: { sellerId: id, status: 'DELIVERED', deliveredAt: range } }),
       prisma.stockMovement.count({ where: { userId: id, createdAt: range, type: { in: ['IN', 'OUT', 'ADJUST'] } } }),
       prisma.product.count({ where: { createdById: id, createdAt: range } }),
     ]);
     const timing = await prisma.$queryRaw<{ accept: number | null; delivery: number | null }[]>`
       SELECT
         (SELECT AVG(EXTRACT(EPOCH FROM ("acceptedAt" - "createdAt")) / 60) FROM "Order" WHERE "sellerId" = ${id} AND "acceptedAt" >= ${start} AND "acceptedAt" < ${end})::float AS accept,
-        (SELECT AVG(EXTRACT(EPOCH FROM ("deliveredAt" - "pickedUpAt")) / 60) FROM "Order" WHERE "courierId" = ${id} AND status = 'DELIVERED' AND "deliveredAt" >= ${start} AND "deliveredAt" < ${end})::float AS delivery`;
+        (SELECT AVG(EXTRACT(EPOCH FROM ("deliveredAt" - "pickedUpAt")) / 60) FROM "Order" WHERE "sellerId" = ${id} AND status = 'DELIVERED' AND "deliveredAt" >= ${start} AND "deliveredAt" < ${end})::float AS delivery`;
     res.json({
       user: u,
       accepted,
@@ -463,7 +499,7 @@ adminRouter.post(
   '/invites',
   ah(async (req, res) => {
     const body = z
-      .object({ staffName: z.string().trim().min(2).max(60), role: z.enum(['SELLER', 'WAREHOUSE', 'COURIER']) })
+      .object({ staffName: z.string().trim().min(2).max(60), role: z.enum(['SELLER', 'WAREHOUSE']) })
       .parse(req.body);
     const token = crypto.randomBytes(24).toString('base64url').replace(/[^A-Za-z0-9]/g, '').slice(0, 32).padEnd(32, '0');
     const invite = await prisma.invite.create({

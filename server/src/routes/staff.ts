@@ -11,11 +11,10 @@ import { saveImage } from '../services/storage';
 import {
   acceptOrder,
   cancelOrder,
-  courierDelivered,
-  courierOnTheWay,
-  courierTake,
   handOver,
+  markDelivered,
   markReady,
+  sendByTaxi,
   setFinalWeights,
   startPreparing,
   type OrderActor,
@@ -36,14 +35,12 @@ export const STAFF_ORDER_INCLUDE = {
   },
   customer: { select: { id: true, firstName: true, lastName: true, phone: true, telegramId: true, username: true } },
   seller: { select: { id: true, firstName: true, lastName: true, phone: true } },
-  courier: { select: { id: true, firstName: true, lastName: true, phone: true } },
 } satisfies Prisma.OrderInclude;
 
 export function staffOrderDto(o: Prisma.OrderGetPayload<{ include: typeof STAFF_ORDER_INCLUDE }>) {
-  const { groupChatId, groupMessageId, courierMsgs, ...rest } = o;
+  const { groupChatId, groupMessageId, ...rest } = o;
   void groupChatId;
   void groupMessageId;
-  void courierMsgs;
   return {
     ...rest,
     items: o.items.map((i) => ({
@@ -92,35 +89,20 @@ staffRouter.get(
 
 staffRouter.get(
   '/orders/:id',
-  requireRole('SELLER', 'COURIER', 'ADMIN'),
+  sellerOnly,
   ah(async (req, res) => {
     const o = await prisma.order.findUnique({ where: { id: Number(req.params.id) }, include: STAFF_ORDER_INCLUDE });
     if (!o) throw notFound('ORDER_NOT_FOUND', 'Buyurtma topilmadi');
-    if (req.actor!.role === 'COURIER') {
-      const canSee = o.courierId === req.actor!.userId || (o.status === 'READY' && o.deliveryType === 'DELIVERY' && !o.courierId);
-      if (!canSee) throw notFound('ORDER_NOT_FOUND', 'Buyurtma topilmadi');
-    }
     res.json(staffOrderDto(o));
   }),
 );
 
 staffRouter.get(
   '/stats/today',
-  requireRole('SELLER', 'COURIER', 'ADMIN'),
+  sellerOnly,
   ah(async (req, res) => {
     const since = startOfDayTashkent();
     const me = req.actor!.userId;
-    if (req.actor!.role === 'COURIER') {
-      const [delivered, active] = await Promise.all([
-        prisma.order.count({ where: { courierId: me, status: 'DELIVERED', deliveredAt: { gte: since } } }),
-        prisma.order.count({ where: { courierId: me, status: { in: ['READY', 'ON_THE_WAY'] } } }),
-      ]);
-      const sum = await prisma.order.aggregate({
-        where: { courierId: me, status: 'DELIVERED', deliveredAt: { gte: since } },
-        _sum: { finalTotal: true },
-      });
-      return res.json({ delivered, active, total: sum._sum.finalTotal || 0 });
-    }
     const where: Prisma.OrderWhereInput = { acceptedAt: { gte: since }, ...(req.actor!.role === 'ADMIN' ? {} : { sellerId: me }) };
     const [count, completed, cancelled, sum] = await Promise.all([
       prisma.order.count({ where }),
@@ -137,6 +119,9 @@ const idParam = (req: Express.Request & { params: Record<string, string> }) => N
 staffRouter.post('/orders/:id/accept', sellerOnly, ah(async (req, res) => res.json({ id: (await acceptOrder(idParam(req), actorOf(req))).id })));
 staffRouter.post('/orders/:id/prepare', sellerOnly, ah(async (req, res) => res.json({ id: (await startPreparing(idParam(req), actorOf(req))).id })));
 staffRouter.post('/orders/:id/handover', sellerOnly, ah(async (req, res) => res.json({ id: (await handOver(idParam(req), actorOf(req))).id })));
+// Yetkazish taksi orqali: sotuvchi "Taksiga berildi" -> "Yetkazildi"
+staffRouter.post('/orders/:id/on-the-way', sellerOnly, ah(async (req, res) => res.json({ id: (await sendByTaxi(idParam(req), actorOf(req))).id })));
+staffRouter.post('/orders/:id/delivered', sellerOnly, ah(async (req, res) => res.json({ id: (await markDelivered(idParam(req), actorOf(req))).id })));
 
 staffRouter.post(
   '/orders/:id/weights',
@@ -171,32 +156,3 @@ staffRouter.post(
     res.json({ id: o.id });
   }),
 );
-
-// ================= KURYER =================
-
-const courierOnly = requireRole('COURIER', 'ADMIN');
-
-staffRouter.get(
-  '/courier/orders',
-  courierOnly,
-  ah(async (req, res) => {
-    const tab = z.enum(['available', 'active', 'done']).default('active').parse(req.query.tab);
-    const me = req.actor!.userId;
-    const isAdmin = req.actor!.role === 'ADMIN';
-    let where: Prisma.OrderWhereInput;
-    if (tab === 'available') where = { status: 'READY', deliveryType: 'DELIVERY', courierId: null };
-    else if (tab === 'active') where = { status: { in: ['READY', 'ON_THE_WAY'] }, ...(isAdmin ? { courierId: { not: null } } : { courierId: me }) };
-    else where = { status: 'DELIVERED', ...(isAdmin ? {} : { courierId: me }) };
-    const orders = await prisma.order.findMany({
-      where,
-      include: STAFF_ORDER_INCLUDE,
-      orderBy: { readyAt: tab === 'done' ? 'desc' : 'asc' },
-      take: 100,
-    });
-    res.json(orders.map(staffOrderDto));
-  }),
-);
-
-staffRouter.post('/courier/orders/:id/take', courierOnly, ah(async (req, res) => res.json({ id: (await courierTake(idParam(req), actorOf(req))).id })));
-staffRouter.post('/courier/orders/:id/on-the-way', courierOnly, ah(async (req, res) => res.json({ id: (await courierOnTheWay(idParam(req), actorOf(req))).id })));
-staffRouter.post('/courier/orders/:id/delivered', courierOnly, ah(async (req, res) => res.json({ id: (await courierDelivered(idParam(req), actorOf(req))).id })));

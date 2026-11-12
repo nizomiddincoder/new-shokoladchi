@@ -12,7 +12,6 @@ export const ORDER_FULL = {
   items: { orderBy: { id: 'asc' } },
   customer: true,
   seller: true,
-  courier: true,
 } satisfies Prisma.OrderInclude;
 
 export type OrderFull = Prisma.OrderGetPayload<{ include: typeof ORDER_FULL }>;
@@ -26,7 +25,7 @@ export function formatPhone(p: string | null | undefined) {
   return digits ? `+${digits}` : '';
 }
 
-/** Buyurtmaning to'liq matni (guruh, sotuvchi, kuryer uchun) */
+/** Buyurtmaning to'liq matni (guruh, sotuvchi, admin uchun) */
 export function orderText(order: OrderFull, lang: Language, opts: { header?: string } = {}) {
   const L: string[] = [];
   L.push(opts.header ?? `<b>#${order.number}</b> — ${t(lang, `status_${order.status}` as const)}`);
@@ -58,7 +57,6 @@ export function orderText(order: OrderFull, lang: Language, opts: { header?: str
   if (order.deliveryType === 'DELIVERY') L.push(`${t(lang, 'delivery_fee')}: ${formatMoney(order.deliveryFee, lang)}`);
   L.push(`<b>${t(lang, 'total')}: ${formatMoney(order.finalTotal, lang)}</b>`);
   if (order.seller) L.push(`${t(lang, 'seller')}: ${escapeHtml(fullName(order.seller))}`);
-  if (order.courier) L.push(`${t(lang, 'courier')}: ${escapeHtml(fullName(order.courier))} ${formatPhone(order.courier.phone)}`);
   if (order.status === 'CANCELLED') {
     L.push('');
     L.push(`<b>${t(lang, 'status_CANCELLED')}</b>: ${escapeHtml(order.cancelReason || '')}`);
@@ -135,7 +133,9 @@ function sellerKeyboard(order: OrderFull, lang: Language) {
   if (order.status === 'ACCEPTED') kb.text(t(lang, 'btn_prepare'), `o:prep:${order.id}`).row();
   if (order.status === 'ACCEPTED' || order.status === 'PREPARING') kb.text(t(lang, 'btn_ready'), `o:ready:${order.id}`).row();
   if (order.status === 'READY' && order.deliveryType === 'PICKUP') kb.text(t(lang, 'btn_handover'), `o:hand:${order.id}`).row();
-  if (['ACCEPTED', 'PREPARING', 'READY'].includes(order.status)) kb.text(t(lang, 'btn_cancel'), `o:cancel:${order.id}`).row();
+  if (order.status === 'READY' && order.deliveryType === 'DELIVERY') kb.text(t(lang, 'btn_on_the_way'), `o:way:${order.id}`).row();
+  if (order.status === 'ON_THE_WAY') kb.text(t(lang, 'btn_delivered'), `o:dlv:${order.id}`).row();
+  if (['ACCEPTED', 'PREPARING', 'READY', 'ON_THE_WAY'].includes(order.status)) kb.text(t(lang, 'btn_cancel'), `o:cancel:${order.id}`).row();
   kb.webApp(t(lang, 'btn_open_app'), appUrl(`staff/orders/${order.id}`));
   return kb;
 }
@@ -180,7 +180,6 @@ export async function notifyCustomerStatus(order: OrderFull, status: OrderStatus
   const lang = c.language;
   const chat = String(c.telegramId);
   const kb = new InlineKeyboard().webApp(t(lang, 'btn_open_app'), appUrl(`orders/${order.id}`));
-  const courierName = escapeHtml(fullName(order.courier));
   let text = '';
   switch (status) {
     case 'ACCEPTED':
@@ -212,7 +211,7 @@ export async function notifyCustomerStatus(order: OrderFull, status: OrderStatus
       break;
     }
     case 'ON_THE_WAY':
-      text = t(lang, 'c_on_the_way', { number: order.number, courier: courierName, phone: formatPhone(order.courier?.phone) });
+      text = t(lang, 'c_on_the_way', { number: order.number });
       break;
     case 'DELIVERED':
       text = t(lang, 'c_delivered', { number: order.number });
@@ -229,91 +228,10 @@ export async function notifyCustomerStatus(order: OrderFull, status: OrderStatus
   await safeCall(chat, () => bot.api.sendMessage(chat, text, { parse_mode: 'HTML', reply_markup: kb }));
 }
 
-export async function notifyCustomerCourierAssigned(order: OrderFull) {
-  const c = order.customer;
-  await safeCall(c.telegramId, () =>
-    bot.api.sendMessage(
-      String(c.telegramId),
-      t(c.language, 'c_courier_assigned', { number: order.number, courier: escapeHtml(fullName(order.courier)) }),
-      { parse_mode: 'HTML' },
-    ),
-  );
-}
-
-// ---------- Kuryer ----------
-
-type CourierMsg = { chatId: string; messageId: number };
-
-export async function dispatchToCouriers(order: OrderFull) {
-  const msgs: CourierMsg[] = [];
-  if (env.COURIERS_GROUP_CHAT_ID) {
-    const chat = env.COURIERS_GROUP_CHAT_ID;
-    const res = await safeCall(chat, () =>
-      bot.api.sendMessage(chat, orderText(order, 'uz', { header: t('uz', 'courier_new', { number: order.number }) }), {
-        parse_mode: 'HTML',
-        reply_markup: new InlineKeyboard().text(t('uz', 'btn_take'), `o:take:${order.id}`),
-        link_preview_options: { is_disabled: true },
-      }),
-    );
-    if (res.ok) msgs.push({ chatId: chat, messageId: res.value.message_id });
-  } else {
-    const couriers = await prisma.user.findMany({
-      where: { role: 'COURIER', isBlocked: false, regStep: 'DONE', botBlocked: false },
-    });
-    for (const c of couriers) {
-      const lang = c.language;
-      const res = await safeCall(c.telegramId, () =>
-        bot.api.sendMessage(String(c.telegramId), orderText(order, lang, { header: t(lang, 'courier_new', { number: order.number }) }), {
-          parse_mode: 'HTML',
-          reply_markup: new InlineKeyboard().text(t(lang, 'btn_take'), `o:take:${order.id}`),
-          link_preview_options: { is_disabled: true },
-        }),
-      );
-      if (res.ok) msgs.push({ chatId: String(c.telegramId), messageId: res.value.message_id });
-    }
-  }
-  await prisma.order.update({ where: { id: order.id }, data: { courierMsgs: msgs } });
-}
-
-/** Kuryer olgandan keyin boshqa kuryerlardagi xabarni yangilaydi */
-export async function refreshCourierOffers(order: OrderFull) {
-  const msgs = (order.courierMsgs as CourierMsg[] | null) || [];
-  const taken = t('uz', 'already_taken', { name: escapeHtml(fullName(order.courier)) });
-  for (const m of msgs) {
-    await safeCall(m.chatId, () =>
-      bot.api.editMessageText(m.chatId, m.messageId, `${orderText(order, 'uz', { header: `<b>#${order.number}</b>` })}\n\n<b>${taken}</b>`, {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-      }),
-    );
-  }
-}
-
-function courierKeyboard(order: OrderFull, lang: Language) {
-  const kb = new InlineKeyboard();
-  if (order.status === 'READY') kb.text(t(lang, 'btn_on_the_way'), `o:way:${order.id}`).row();
-  if (order.status === 'ON_THE_WAY') kb.text(t(lang, 'btn_delivered'), `o:dlv:${order.id}`).row();
-  kb.webApp(t(lang, 'btn_open_app'), appUrl(`courier/orders/${order.id}`));
-  return kb;
-}
-
-export async function sendCourierCard(order: OrderFull) {
-  const c = order.courier;
-  if (!c) return;
-  const lang = c.language;
-  await safeCall(c.telegramId, () =>
-    bot.api.sendMessage(String(c.telegramId), orderText(order, lang), {
-      parse_mode: 'HTML',
-      reply_markup: courierKeyboard(order, lang),
-      link_preview_options: { is_disabled: true },
-    }),
-  );
-}
-
 // ---------- Umumiy ----------
 
 export async function notifyStaffCancelled(order: OrderFull) {
-  const targets = [order.seller, order.courier].filter(Boolean) as User[];
+  const targets = [order.seller].filter(Boolean) as User[];
   for (const u of targets) {
     await safeCall(u.telegramId, () =>
       bot.api.sendMessage(String(u.telegramId), orderText(order, u.language), {

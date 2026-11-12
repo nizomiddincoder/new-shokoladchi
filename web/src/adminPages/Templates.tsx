@@ -6,7 +6,7 @@ import { del, get, patch, post, upload } from '../shared/api';
 import type { Paged, Product } from '../shared/types';
 import { Badge, Button, Card, ConfirmModal, Empty, Field, Modal, Switch, useToast } from '../shared/ui';
 import { OrdersListSkeleton } from '../shared/staffParts';
-import { loadImage, renderDesign, type DesignState } from '../shared/personalRender';
+import { loadImage, makeDesign, renderDesign } from '../shared/personalRender';
 import { money, nameOf } from '../shared/format';
 import { AdminPage } from './common';
 
@@ -48,8 +48,8 @@ function AreaPreview({ form, testPhoto }: { form: TplForm; testPhoto: HTMLImageE
     c.height = Math.round(form.height * scale);
     c.style.width = `${w}px`;
     const ctx = c.getContext('2d')!;
-    const d: DesignState = { photo: testPhoto, zoom: 1, offX: 0, offY: 0, text: testPhoto ? 'Tabriklaymiz!' : '', textColor: '#FFFFFF', textSize: 'M', textPos: 'bottom' };
-    renderDesign(ctx, img, form.width, form.height, form, d, scale, t('personal.placeholder'));
+    const d = makeDesign(form, form.width, form.height, testPhoto, testPhoto ? 'Tabriklaymiz!' : '');
+    renderDesign(ctx, img, form.width, form.height, form, d, scale, { placeholder: t('personal.placeholder') });
     // Joy chegarasi
     ctx.save();
     ctx.scale(scale, scale);

@@ -44,12 +44,11 @@ export async function buildExport(type: ExportType, range?: { start?: Date; end?
       { header: 'Yetkazish', key: 'deliveryFee', width: 12 },
       { header: 'Jami', key: 'finalTotal', width: 14 },
       { header: 'Sotuvchi', key: 'seller', width: 20 },
-      { header: 'Kuryer', key: 'courier', width: 20 },
       { header: 'Bekor sababi', key: 'cancelReason', width: 24 },
     ];
     const orders = await prisma.order.findMany({
       where: range?.start || range?.end ? { createdAt: { gte: range.start, lt: range.end } } : {},
-      include: { items: true, customer: true, seller: true, courier: true },
+      include: { items: true, customer: true, seller: true },
       orderBy: { createdAt: 'desc' },
     });
     for (const o of orders) {
@@ -66,7 +65,6 @@ export async function buildExport(type: ExportType, range?: { start?: Date; end?
         deliveryFee: o.deliveryFee,
         finalTotal: o.finalTotal,
         seller: fullName(o.seller),
-        courier: fullName(o.courier),
         cancelReason: o.cancelReason || '',
       });
     }

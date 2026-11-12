@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Languages, LockKeyhole, LogOut, Menu, Moon, Sun, X } from 'lucide-react';
 import '../shared/styles.css';
 import { applyTheme, useTheme } from '../shared/theme';
-import { ShopLogo, useBranding } from '../shared/branding';
+import { ShopLogo, useBranding, useBrandingFavicon } from '../shared/branding';
 import i18n, { setLanguage } from '../shared/i18n';
 import { ApiError, get, post, setUnauthorizedHandler } from '../shared/api';
 import type { Me } from '../shared/types';
@@ -73,17 +73,20 @@ function Sidebar({ onNavigate, onLogout }: { onNavigate?: () => void; onLogout: 
   const { t } = useTranslation();
   const lang = i18n.language === 'ru' ? 'ru' : 'uz';
   const branding = useBranding();
+  useBrandingFavicon(branding.data?.logoUrl);
   const { theme, toggle } = useTheme();
+  const iconBtn = 'flex h-10 w-10 items-center justify-center rounded-xl text-ink transition hover:bg-primary-soft';
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2.5 px-5 py-5">
+      <div className="flex shrink-0 items-center gap-2.5 px-4 py-4">
         <ShopLogo url={branding.data?.logoUrl} className="h-11 w-11" />
         <div className="min-w-0">
           <div className="truncate font-display text-[18px] font-bold text-primary-dark">{branding.data?.shopName || t('admin.title')}</div>
           <div className="text-[11px] font-semibold text-muted">{t('admin.title')}</div>
         </div>
       </div>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3">
+      {/* Menyu aylantirilmaydi: barcha bo'limlar bir ekranga sig'adi */}
+      <nav className="no-scrollbar flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3">
         {ADMIN_MENU.map((m) => (
           <NavLink
             key={m.to}
@@ -91,7 +94,10 @@ function Sidebar({ onNavigate, onLogout }: { onNavigate?: () => void; onLogout: 
             end={m.to === '/'}
             onClick={onNavigate}
             className={({ isActive }) =>
-              clsx('flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-semibold transition', isActive ? 'bg-primary text-white' : 'text-ink hover:bg-primary-soft')
+              clsx(
+                'flex shrink-0 items-center gap-3 rounded-xl px-3 py-[7px] text-[14px] font-semibold transition',
+                isActive ? 'bg-primary text-white' : 'text-ink hover:bg-primary-soft',
+              )
             }
           >
             <m.icon className="h-[18px] w-[18px]" />
@@ -99,21 +105,43 @@ function Sidebar({ onNavigate, onLogout }: { onNavigate?: () => void; onLogout: 
           </NavLink>
         ))}
       </nav>
-      <div className="space-y-1 border-t border-line p-3">
-        <button onClick={toggle} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-semibold hover:bg-primary-soft">
-          {theme === 'dark' ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
-          {theme === 'dark' ? t('theme.light') : t('theme.dark')}
+      <div className="flex shrink-0 items-center gap-1 border-t border-line px-3 py-2.5">
+        <button
+          onClick={toggle}
+          className={iconBtn}
+          title={theme === 'dark' ? t('theme.light') : t('theme.dark')}
+          aria-label={theme === 'dark' ? t('theme.light') : t('theme.dark')}
+        >
+          {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </button>
-        <button onClick={() => setLanguage(lang === 'uz' ? 'ru' : 'uz')} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-semibold hover:bg-primary-soft">
-          <Languages className="h-[18px] w-[18px]" />
-          {lang === 'uz' ? 'Русский' : "O'zbekcha"}
+        <button
+          onClick={() => setLanguage(lang === 'uz' ? 'ru' : 'uz')}
+          className={iconBtn}
+          title={lang === 'uz' ? 'Русский' : "O'zbekcha"}
+          aria-label={lang === 'uz' ? 'Русский' : "O'zbekcha"}
+        >
+          <Languages className="h-5 w-5" />
         </button>
-        <button onClick={onLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-semibold text-danger hover:bg-danger-soft">
-          <LogOut className="h-[18px] w-[18px]" />
-          {t('common.logout')}
+        <button
+          onClick={onLogout}
+          className="ml-auto flex h-10 w-10 items-center justify-center rounded-xl text-danger transition hover:bg-danger-soft"
+          title={t('common.logout')}
+          aria-label={t('common.logout')}
+        >
+          <LogOut className="h-5 w-5" />
         </button>
       </div>
     </div>
+  );
+}
+
+function MobileBrand() {
+  const branding = useBranding();
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <ShopLogo url={branding.data?.logoUrl} className="h-8 w-8 rounded-xl" />
+      <span className="truncate font-extrabold text-primary-dark">{branding.data?.shopName || 'Admin'}</span>
+    </span>
   );
 }
 
@@ -156,10 +184,8 @@ function AdminWeb() {
         </aside>
         {mobileOpen && (
           <div className="fixed inset-0 z-50 bg-black/40 lg:hidden" onClick={() => setMobileOpen(false)}>
-            <aside className="h-full w-72 bg-card" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-end p-2">
-                <button onClick={() => setMobileOpen(false)} className="p-2" aria-label="close"><X className="h-5 w-5" /></button>
-              </div>
+            <aside className="relative h-full w-72 bg-card" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => setMobileOpen(false)} className="absolute right-2 top-2 z-10 p-2" aria-label="close"><X className="h-5 w-5" /></button>
               <Sidebar onNavigate={() => setMobileOpen(false)} onLogout={logout} />
             </aside>
           </div>
@@ -167,7 +193,7 @@ function AdminWeb() {
         <div className="lg:pl-64">
           <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-card px-4 lg:hidden">
             <button onClick={() => setMobileOpen(true)} className="-ml-2 p-2" aria-label="menu"><Menu className="h-6 w-6" /></button>
-            <span className="font-extrabold text-primary-dark">Admin</span>
+            <MobileBrand />
           </header>
           <main className="mx-auto max-w-7xl p-4 md:p-6 lg:p-8">
             <AdminRoutes />

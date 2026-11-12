@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Download, FileSpreadsheet, History, ImagePlus, Send, Sparkles } from 'lucide-react';
 import { get, post, put, qs, upload } from '../shared/api';
-import { ShopLogo } from '../shared/branding';
+import { ShopLogo, type Branding } from '../shared/branding';
 import type { AuditEntry, Paged, Settings } from '../shared/types';
 import { Badge, Button, Card, Empty, ErrorState, Field, PageLoader, Pager, Stat, useToast } from '../shared/ui';
 import { MapView } from '../shared/MapView';
@@ -31,7 +31,8 @@ export function SettingsPage() {
     setLogoBusy(true);
     try {
       const r = await upload<{ url: string }>('/admin/uploads?folder=branding', f);
-      setS((x) => (x ? { ...x, logoUrl: r.url } : x));
+      // Logo darhol saqlanadi — admin panel va mini app'da shu zahoti yangilanadi
+      if (s) await save({ ...s, logoUrl: r.url });
     } catch (e) {
       toast.error(e);
     } finally {
@@ -46,7 +47,9 @@ export function SettingsPage() {
 
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setS({ ...s, [k]: v });
   const int = (v: string) => Number(v.replace(/\D/g, '')) || 0;
-  const save = async () => {
+  const save = async (next: Settings = s) => {
+    const s = next;
+    setS(next);
     setBusy(true);
     try {
       await put('/admin/settings', {
@@ -64,6 +67,8 @@ export function SettingsPage() {
         acceptTimeoutMinutes: s.acceptTimeoutMinutes,
       });
       toast.success(t('common.saved'));
+      // Sidebar/login logosi va nomi darhol yangilanadi
+      qc.setQueryData<Branding>(['branding'], { shopName: s.shopName, logoUrl: s.logoUrl ?? null });
       await qc.invalidateQueries({ queryKey: ['admin-settings'] });
       await qc.invalidateQueries({ queryKey: ['branding'] });
       await qc.invalidateQueries({ queryKey: ['home'] });
@@ -76,7 +81,7 @@ export function SettingsPage() {
   const ai = q.data!.ai;
 
   return (
-    <AdminPage title={t('admin.settings')} actions={<Button size="sm" loading={busy} onClick={save}>{t('common.save')}</Button>}>
+    <AdminPage title={t('admin.settings')} actions={<Button size="sm" loading={busy} onClick={() => save()}>{t('common.save')}</Button>}>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="space-y-3 p-4">
           <Field label={t('admin.logo')} hint={t('admin.logoHint')}>
@@ -88,7 +93,7 @@ export function SettingsPage() {
                   {t('admin.uploadLogo')}
                 </Button>
                 {s.logoUrl && (
-                  <Button type="button" size="sm" variant="ghost" className="text-danger" onClick={() => set('logoUrl', null)}>
+                  <Button type="button" size="sm" variant="ghost" className="text-danger" onClick={() => void save({ ...s, logoUrl: null })}>
                     {t('admin.removeLogo')}
                   </Button>
                 )}
@@ -151,7 +156,7 @@ export function SettingsPage() {
               <Stat label={t('admin.aiQueue')} value={ai.queue} />
             </div>
           </Card>
-          <Button block size="lg" loading={busy} onClick={save}>{t('common.save')}</Button>
+          <Button block size="lg" loading={busy} onClick={() => save()}>{t('common.save')}</Button>
         </div>
       </div>
     </AdminPage>

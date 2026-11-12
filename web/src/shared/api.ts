@@ -67,6 +67,31 @@ export function upload<T = any>(path: string, file: File, field = 'file') {
   return api<T>(path, { method: 'POST', form });
 }
 
+/** Fayl yuborib, javobni rasm (Blob) sifatida olish — masalan AI fonni olib tashlagan PNG */
+export async function uploadForBlob(path: string, file: Blob, field = 'file', signal?: AbortSignal): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const initData = tg?.initData;
+  if (initData) headers.Authorization = `tma ${initData}`;
+  const form = new FormData();
+  form.append(field, file, 'photo.jpg');
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { method: 'POST', headers, body: form, credentials: 'include', signal });
+  } catch {
+    throw new ApiError(0, 'NETWORK', 'Internet aloqasini tekshiring');
+  }
+  if (!res.ok) {
+    let e: { code?: string; message?: string } | undefined;
+    try {
+      e = (await res.json())?.error;
+    } catch {
+      /* JSON emas */
+    }
+    throw new ApiError(res.status, e?.code || 'HTTP_' + res.status, e?.message || 'Xatolik yuz berdi');
+  }
+  return res.blob();
+}
+
 /** Query-string yasash: bo'sh qiymatlar tashlab yuboriladi */
 export function qs(params: Record<string, unknown>) {
   const s = new URLSearchParams();

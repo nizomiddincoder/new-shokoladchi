@@ -83,14 +83,6 @@ export async function dashboardStats(start: Date, end: Date) {
     WHERE o."createdAt" >= ${start} AND o."createdAt" < ${end}
     GROUP BY u.id ORDER BY accepted DESC`;
 
-  const couriers = await prisma.$queryRaw<{ id: number; name: string; delivered: bigint; avg_delivery_min: number | null }[]>`
-    SELECT u.id, TRIM(u."firstName" || ' ' || u."lastName") AS name,
-      COUNT(*) FILTER (WHERE o.status = 'DELIVERED')::bigint AS delivered,
-      AVG(EXTRACT(EPOCH FROM (o."deliveredAt" - o."pickedUpAt")) / 60) FILTER (WHERE o.status = 'DELIVERED')::float AS avg_delivery_min
-    FROM "Order" o JOIN "User" u ON u.id = o."courierId"
-    WHERE o."createdAt" >= ${start} AND o."createdAt" < ${end}
-    GROUP BY u.id ORDER BY delivered DESC`;
-
   const orders = n(summary?.orders);
   const completedCount = n(summary?.completed);
   const revenue = n(summary?.revenue);
@@ -114,12 +106,6 @@ export async function dashboardStats(start: Date, end: Date) {
       completed: n(s.completed),
       revenue: n(s.revenue),
       avgAcceptMin: s.avg_accept_min == null ? null : Math.round(s.avg_accept_min * 10) / 10,
-    })),
-    couriers: couriers.map((c) => ({
-      id: c.id,
-      name: c.name,
-      delivered: n(c.delivered),
-      avgDeliveryMin: c.avg_delivery_min == null ? null : Math.round(c.avg_delivery_min * 10) / 10,
     })),
   };
 }

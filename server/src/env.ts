@@ -12,7 +12,6 @@ type Env = {
   ADMIN_WEB_PASSWORD: string;
   JWT_SECRET: string;
   ORDERS_GROUP_CHAT_ID: string;
-  COURIERS_GROUP_CHAT_ID: string | null;
   GEMINI_API_KEY: string | null;
   GEMINI_IMAGE_MODEL: string;
   GEMINI_IMAGE_SIZE: string | null;
@@ -74,7 +73,6 @@ function loadEnv(): Env {
     ADMIN_WEB_PASSWORD: process.env.ADMIN_WEB_PASSWORD!,
     JWT_SECRET: process.env.JWT_SECRET!,
     ORDERS_GROUP_CHAT_ID: process.env.ORDERS_GROUP_CHAT_ID!.trim(),
-    COURIERS_GROUP_CHAT_ID: process.env.COURIERS_GROUP_CHAT_ID?.trim() || null,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY?.trim() || null,
     GEMINI_IMAGE_MODEL: process.env.GEMINI_IMAGE_MODEL?.trim() || 'gemini-2.5-flash-image',
     // Faqat 2K/4K ni qo'llab-quvvatlaydigan modellar uchun (masalan gemini-3-pro-image-preview)

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Pencil, Percent, Plus, Search, Tags, Trash2 } from 'lucide-react';
-import { del, get, patch, post, qs } from '../shared/api';
+import { ArrowDown, ArrowUp, Eye, EyeOff, FileDown, FileSpreadsheet, FileUp, Pencil, Percent, Plus, Search, Tags, Trash2 } from 'lucide-react';
+import { del, get, patch, post, qs, upload } from '../shared/api';
 import type { Category, Paged, Product } from '../shared/types';
 import { Badge, Button, Card, ConfirmModal, Empty, ErrorState, Field, Modal, Pager, Segmented, Switch, Tabs, clsx, useToast } from '../shared/ui';
 import { ProductThumb } from '../shared/orderParts';
@@ -11,7 +11,113 @@ import { ProductForm } from '../shared/ProductForm';
 import { OrdersListSkeleton } from '../shared/staffParts';
 import { CATEGORY_ICONS, CategoryIcon } from '../shared/icons';
 import { money, nameOf, qty, unitLabel } from '../shared/format';
-import { AdminPage, TableWrap, useIsMobile } from './common';
+import { AdminPage, TableWrap, useAdminEnv, useIsMobile } from './common';
+
+type ImportResult = { created: number; updated: number; unchanged: number; categoriesCreated: string[]; errors: { row: number; message: string }[] };
+
+/** Excel fayldan mahsulotlarni qo'shish/yangilash */
+function ExcelImportModal({ open, onClose, onDownload }: { open: boolean; onClose: () => void; onDownload: () => void }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  useEffect(() => {
+    if (open) {
+      setFile(null);
+      setResult(null);
+    }
+  }, [open]);
+  const submit = async () => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const r = await upload<ImportResult>('/admin/products/import', file);
+      setResult(r);
+      await qc.invalidateQueries({ queryKey: ['manage-products'] });
+      await qc.invalidateQueries({ queryKey: ['manage-categories'] });
+      if (!r.errors.length) toast.success(t('admin.importDone', { created: r.created, updated: r.updated }));
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t('admin.excelImport')}
+      footer={
+        <div className="pb-2">
+          {result ? (
+            <Button block variant="secondary" onClick={onClose}>{t('common.close')}</Button>
+          ) : (
+            <Button block icon={FileUp} loading={busy} disabled={!file} onClick={submit}>{t('admin.importStart')}</Button>
+          )}
+        </div>
+      }
+    >
+      {result ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl bg-success-soft p-3">
+              <div className="text-[22px] font-extrabold text-success">{result.created}</div>
+              <div className="text-[12px] font-semibold text-muted">{t('admin.importCreated')}</div>
+            </div>
+            <div className="rounded-xl bg-primary-soft p-3">
+              <div className="text-[22px] font-extrabold text-primary">{result.updated}</div>
+              <div className="text-[12px] font-semibold text-muted">{t('admin.importUpdated')}</div>
+            </div>
+            <div className={clsx('rounded-xl p-3', result.errors.length ? 'bg-danger-soft' : 'bg-surface')}>
+              <div className={clsx('text-[22px] font-extrabold', result.errors.length ? 'text-danger' : 'text-muted')}>{result.errors.length}</div>
+              <div className="text-[12px] font-semibold text-muted">{t('admin.importErrors')}</div>
+            </div>
+          </div>
+          {result.categoriesCreated.length > 0 && (
+            <p className="text-[13px] text-muted">
+              {t('admin.importNewCats')}: <b className="text-ink">{result.categoriesCreated.join(', ')}</b>
+            </p>
+          )}
+          {result.errors.length > 0 && (
+            <div className="max-h-60 space-y-1 overflow-y-auto rounded-xl border border-line p-2 text-[13px]">
+              {result.errors.map((e) => (
+                <div key={e.row} className="flex gap-2">
+                  <span className="shrink-0 font-bold text-danger">{t('admin.importRow', { row: e.row })}</span>
+                  <span>{e.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <ol className="list-decimal space-y-1 pl-5 text-[13px] text-muted">
+            <li>
+              {t('admin.importStep1')}{' '}
+              <button type="button" className="font-bold text-primary underline" onClick={onDownload}>{t('admin.excelDownload')}</button>
+            </li>
+            <li>{t('admin.importStep2')}</li>
+            <li>{t('admin.importStep3')}</li>
+          </ol>
+          <input ref={fileRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex w-full flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-line px-4 py-6 text-center transition hover:border-primary"
+          >
+            <FileSpreadsheet className="h-8 w-8 text-primary" />
+            <span className="text-[14px] font-bold">{file ? file.name : t('admin.importPick')}</span>
+            <span className="text-[12px] text-muted">.xlsx</span>
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 function BulkPriceModal({ open, onClose, ids, categories }: { open: boolean; onClose: () => void; ids: number[]; categories: Category[] }) {
   const { t } = useTranslation();
@@ -107,6 +213,9 @@ export function ProductsPage() {
   const [selected, setSelected] = useState<number[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [toDelete, setToDelete] = useState<Product | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [excelBusy, setExcelBusy] = useState(false);
+  const { isWeb } = useAdminEnv();
   useEffect(() => {
     const h = setTimeout(() => {
       setDebounced(search.trim());
@@ -155,12 +264,40 @@ export function ProductsPage() {
   };
   const allSel = !!q.data?.items.length && q.data.items.every((p) => selected.includes(p.id));
 
+  // Bir tugma: barcha mahsulotlar Excel fayl bo'lib yuklanadi (web) yoki botga yuboriladi (mini app)
+  const downloadExcel = async () => {
+    if (isWeb) {
+      const a = document.createElement('a');
+      a.href = '/api/admin/products/excel';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+    setExcelBusy(true);
+    try {
+      await post('/admin/products/excel/send');
+      toast.success(t('admin.sentToChat'));
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setExcelBusy(false);
+    }
+  };
+
   return (
     <AdminPage
       title={t('admin.products')}
       root
       actions={
         <>
+          <Button size="sm" variant="secondary" icon={FileDown} loading={excelBusy} onClick={downloadExcel} title={t('admin.excelDownload')}>
+            {mobile ? '' : t('admin.excelDownload')}
+          </Button>
+          <Button size="sm" variant="secondary" icon={FileUp} onClick={() => setImportOpen(true)} title={t('admin.excelImport')}>
+            {mobile ? '' : t('admin.excelImport')}
+          </Button>
           <Button size="sm" variant="secondary" icon={Percent} onClick={() => setBulkOpen(true)}>
             {mobile ? '' : t('admin.bulkPrice')}
           </Button>
@@ -279,6 +416,7 @@ export function ProductsPage() {
         {q.data && <Pager page={page} pages={q.data.pages} onChange={setPage} />}
       </div>
       <BulkPriceModal open={bulkOpen} onClose={() => setBulkOpen(false)} ids={selected} categories={cats.data || []} />
+      <ExcelImportModal open={importOpen} onClose={() => setImportOpen(false)} onDownload={downloadExcel} />
       <ConfirmModal open={!!toDelete} onClose={() => setToDelete(null)} onConfirm={remove} danger title={`${t('common.delete')}: ${toDelete ? nameOf(toDelete) : ''}`} />
     </AdminPage>
   );

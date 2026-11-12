@@ -25,7 +25,7 @@ export function OrdersPage() {
   const navigate = useNavigate();
   const mobile = useIsMobile();
   const staff = useStaffList();
-  const [f, setF] = useState({ status: '', deliveryType: '', sellerId: '', courierId: '', from: '', to: '', q: '' });
+  const [f, setF] = useState({ status: '', deliveryType: '', sellerId: '', from: '', to: '', q: '' });
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   useEffect(() => {
@@ -70,13 +70,7 @@ export function OrdersPage() {
               <option key={s.id} value={s.id}>{personName(s)}</option>
             ))}
           </select>
-          <select className="input h-10 py-1 text-[14px]" value={f.courierId} onChange={(e) => set('courierId', e.target.value)}>
-            <option value="">{t('admin.allCouriers')}</option>
-            {staff.data?.filter((s) => s.role === 'COURIER').map((s) => (
-              <option key={s.id} value={s.id}>{personName(s)}</option>
-            ))}
-          </select>
-          <div className="col-span-2 flex items-center gap-1.5 2xl:col-span-1">
+          <div className="col-span-2 flex items-center gap-1.5">
             <input type="date" className="input h-10 py-1 text-[13px]" value={f.from} onChange={(e) => set('from', e.target.value)} title={t('common.from')} />
             <input type="date" className="input h-10 py-1 text-[13px]" value={f.to} onChange={(e) => set('to', e.target.value)} title={t('common.to')} />
           </div>
@@ -103,7 +97,6 @@ export function OrdersPage() {
                     <th>{t('admin.type')}</th>
                     <th>{t('common.status')}</th>
                     <th>{t('admin.seller')}</th>
-                    <th>{t('admin.courier')}</th>
                     <th className="text-right">{t('common.total')}</th>
                   </tr>
                 </thead>
@@ -119,7 +112,6 @@ export function OrdersPage() {
                       <td className="whitespace-nowrap">{o.deliveryType === 'DELIVERY' ? t('orders.delivery') : t('orders.pickup')}</td>
                       <td><StatusBadge status={o.status} /></td>
                       <td>{personName(o.seller) || '—'}</td>
-                      <td>{personName(o.courier) || '—'}</td>
                       <td className="whitespace-nowrap text-right font-bold">{money(o.finalTotal)}</td>
                     </tr>
                   ))}
