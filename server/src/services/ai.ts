@@ -294,16 +294,37 @@ export async function resumePendingAi() {
 
 const CUTOUT_TIMEOUT_MS = 60_000;
 const CUTOUT_MAX = 1400;
-/** Kalit rang: odamlar suratida deyarli uchramaydigan sof magenta */
-const KEY_PROMPT = [
-  'Cut out the main subject(s) of this photo — the person or people (with their full hair), or pets / the main foreground object if there are no people.',
-  'Replace the ENTIRE background with one perfectly flat, uniform, solid pure magenta color (#FF00FF): no gradient, no shadow, no texture, no vignette, no floor, no other objects.',
-  'Keep the subject absolutely identical to the original: same face and identity, expression, pose, clothes, colors, lighting and proportions. Do not beautify, do not redraw, do not add or remove anything, do not crop the subject.',
-  'Keep the same framing and composition as the original photo. Edges must be clean, smooth and precise, especially around hair and shoulders.',
-].join(' ');
-/** Ikkinchi urinish: fon rangi bo'yicha qat'iyroq talab */
-const KEY_PROMPT_STRICT =
-  'IMPORTANT: the previous result had a shaded or pinkish background. The background must be EXACTLY one flat color #FF00FF (RGB 255,0,255) on every single background pixel, edge to edge, with zero lighting variation. Nothing else may be in the background.';
+
+/**
+ * Kalit (xromakey) rang: Gemini fonni shu bitta rangga bo'yaydi, server esa shu rangni shaffof qiladi.
+ * Yashil — teri, soch, lablardan eng uzoq rang (kino "green screen"i). Agar mijoz rasmida yashil
+ * ko'p bo'lsa (yashil kiyim, o'simlik) — magenta ishlatiladi, aks holda kiyim ham o'chib ketadi.
+ */
+type KeyColor = { name: 'green' | 'magenta'; hex: string; rgb: string; hue: number; words: string };
+const KEYS: Record<KeyColor['name'], KeyColor> = {
+  green: { name: 'green', hex: '#00FF00', rgb: '0, 255, 0', hue: 120, words: 'pure chroma-key green' },
+  magenta: { name: 'magenta', hex: '#FF00FF', rgb: '255, 0, 255', hue: 300, words: 'pure magenta' },
+};
+
+function cutoutPrompt(key: KeyColor, retry: boolean) {
+  return [
+    'This is a precise photo EDITING task (background removal / green-screen keying), not the creation of a new image.',
+    'STEP 1 — find the main subject: the person or people in the photo, including their whole head, all of the hair, ears, neck, shoulders, arms, hands, clothes and anything they are holding. If there are no people, the subject is the main pet or object in the foreground.',
+    `STEP 2 — replace EVERYTHING that is not the subject (walls, sky, room, furniture, floor, plants, other far-away people, shadows) with one single solid flat ${key.words} color ${key.hex} (RGB ${key.rgb}).`,
+    'STRICT RULES:',
+    '- The subject must stay exactly as in the original photo: same face and identity, skin tone, expression, eyes, hair, pose, clothes and their colors. Do not retouch, beautify, redraw, recolor, relight, shrink or remove any part of the subject.',
+    '- Keep the exact same framing, size and position of the subject. Do not crop, zoom, move or rotate. If the body is cut off by the photo border, leave it cut off exactly the same way.',
+    `- The background must be 100% uniform ${key.hex} on every background pixel from edge to edge: no gradient, no texture, no shadow, no vignette, no light falloff, no floor line.`,
+    `- No ${key.name} reflections, glow or color spill on the subject. The subject's edges, especially hair, must be clean, sharp and natural.`,
+    `- Never use ${key.hex} or similar colors on the subject itself.`,
+    retry
+      ? `IMPORTANT: the previous attempt was wrong — either the background was not fully replaced with ${key.hex}, or part of the person was deleted. Keep the WHOLE person untouched and make ONLY the background exactly ${key.hex}.`
+      : '',
+    'Output only the edited image.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
 
 /** Rasm nisbatiga eng yaqin Gemini formatini tanlaydi */
 function nearestAspect(w: number, h: number) {
@@ -343,19 +364,32 @@ const hueDist = (a: number, b: number) => {
 
 export class CutoutError extends Error {}
 
+/** Asl rasmda yashil ko'p bo'lsa — magenta, aks holda yashil kalit (ikkinchisi zaxira) */
+export async function chooseKeys(src: Buffer): Promise<KeyColor[]> {
+  const { data, info } = await sharp(src).resize(160, 160, { fit: 'inside' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const n = info.width * info.height;
+  let green = 0;
+  let magenta = 0;
+  for (let i = 0; i < n; i++) {
+    const [h, s, v] = rgbToHsv(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]);
+    if (s < 0.3 || v < 0.2) continue;
+    if (h >= 70 && h <= 170) green++;
+    if (h >= 270 && h <= 340) magenta++;
+  }
+  return green / n > 0.03 && green >= magenta ? [KEYS.magenta, KEYS.green] : [KEYS.green, KEYS.magenta];
+}
+
 /**
- * Bir xil rangli (kalit) fonni shaffoflikka aylantiradi.
- *
- * Gemini fonni har doim ham aynan #FF00FF qilib bermaydi — ko'pincha och-pushti, qizg'ish yoki
- * soyali (gradient) bo'ladi. Shuning uchun fon rangi qat'iy emas, rasmning o'zidan aniqlanadi:
- *  1) yuqori va yon chetlardagi piksellardan eng ko'p uchraydigan rang toni (hue) — fon rangi;
- *  2) chetlardan boshlab shu tonga yaqin piksellar "flood fill" bilan fon deb belgilanadi
- *     (odam ichidagi o'xshash rangli narsalar saqlanib qoladi);
+ * Kalit rangli fonni shaffoflikka aylantiradi.
+ *  1) yuqori va yon chetlardan fonning haqiqiy rangi aniqlanadi (Gemini aynan #00FF00 bermasligi mumkin);
+ *     u so'ralgan kalit rangga yaqin va to'yingan bo'lishi SHART — aks holda (masalan Gemini asl
+ *     bej devorni qoldirgan bo'lsa) hech narsa o'chirilmaydi, xato qaytadi;
+ *  2) yuqori va yon chetlardan flood fill (pastki chet — odatda odamning tanasi, undan boshlanmaydi);
  *  3) fonga juda mos yopiq bo'shliqlar (qo'l va tana orasi) ham fon;
- *  4) chet piksellar yumshoq shaffof bo'ladi va fon rangining "dog'i" (spill) tozalanadi;
- *  5) natija tekshiriladi: fon to'liq olinmagan bo'lsa — xato (rangli fon hech qachon qaytmaydi).
+ *  4) chet piksellar yumshoq shaffof bo'ladi, fon rangining "dog'i" tozalanadi;
+ *  5) tekshiruv: fon olingan, odam esa joyida (markaz bo'sh qolmagan) bo'lishi shart.
  */
-export async function keyToAlpha(input: Buffer) {
+export async function keyToAlpha(input: Buffer, key: KeyColor) {
   const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width: w, height: h } = info;
   const n = w * h;
@@ -370,7 +404,7 @@ export async function keyToAlpha(input: Buffer) {
     V[i] = vv;
   }
 
-  // --- 1) Fon rangini chetlardan aniqlash (pastki chet olinmaydi — u yerda odatda odam bo'ladi)
+  // --- 1) Fon rangini aniqlash va tekshirish
   const depth = Math.max(2, Math.round(Math.min(w, h) * 0.012));
   const sample: number[] = [];
   for (let y = 0; y < depth; y++) for (let x = 0; x < w; x++) sample.push(y * w + x);
@@ -379,29 +413,14 @@ export async function keyToAlpha(input: Buffer) {
       sample.push(y * w + k);
       sample.push(y * w + (w - 1 - k));
     }
-  const bins = new Array(36).fill(0);
-  for (const i of sample) if (S[i] > 0.2 && V[i] > 0.15) bins[Math.floor(H[i] / 10) % 36]++;
-  let best = 0;
-  let bestCount = -1;
-  for (let b = 0; b < 36; b++) {
-    const c = bins[(b + 35) % 36] + bins[b] + bins[(b + 1) % 36];
-    if (c > bestCount) {
-      bestCount = c;
-      best = b;
-    }
-  }
-  if (bestCount < sample.length * 0.5) throw new CutoutError('Fon bir xil rangda emas');
-  const inKeyBin = (i: number) => S[i] > 0.2 && V[i] > 0.15 && hueDist(H[i], best * 10 + 5) <= 15;
-  // Doiraviy o'rtacha ton
+  const keyPix = sample.filter((i) => S[i] > 0.3 && V[i] > 0.2 && hueDist(H[i], key.hue) <= 45);
+  if (keyPix.length < sample.length * 0.5) throw new CutoutError(`Fon ${key.name} rangga bo'yalmadi`);
   let sx = 0;
   let sy = 0;
-  const keyPix: number[] = [];
-  for (const i of sample)
-    if (inKeyBin(i)) {
-      keyPix.push(i);
-      sx += Math.cos((H[i] * Math.PI) / 180);
-      sy += Math.sin((H[i] * Math.PI) / 180);
-    }
+  for (const i of keyPix) {
+    sx += Math.cos((H[i] * Math.PI) / 180);
+    sy += Math.sin((H[i] * Math.PI) / 180);
+  }
   let keyH = (Math.atan2(sy, sx) * 180) / Math.PI;
   if (keyH < 0) keyH += 360;
   const median = (arr: number[]) => {
@@ -410,14 +429,15 @@ export async function keyToAlpha(input: Buffer) {
   };
   const keyS = median(keyPix.map((i) => S[i]));
   const keyV = median(keyPix.map((i) => V[i]));
-  const hueStd = Math.sqrt(keyPix.reduce((acc, i) => acc + hueDist(H[i], keyH) ** 2, 0) / Math.max(1, keyPix.length));
-  const tol = Math.min(26, Math.max(12, hueStd * 2.5 + 8));
-  const minS = Math.max(0.15, keyS * 0.45);
-  const minV = Math.max(0.1, keyV * 0.35);
+  if (keyS < 0.4) throw new CutoutError('Fon rangi juda xira');
+  const hueStd = Math.sqrt(keyPix.reduce((acc, i) => acc + hueDist(H[i], keyH) ** 2, 0) / keyPix.length);
+  const tol = Math.min(28, Math.max(14, hueStd * 2.5 + 10));
+  const minS = Math.max(0.2, keyS * 0.45);
+  const minV = Math.max(0.12, keyV * 0.35);
   const bgLike = (i: number) => S[i] >= minS && V[i] >= minV && hueDist(H[i], keyH) <= tol;
-  const strong = (i: number) => S[i] >= keyS * 0.7 && V[i] >= keyV * 0.5 && hueDist(H[i], keyH) <= tol * 0.6;
+  const strong = (i: number) => S[i] >= keyS * 0.8 && V[i] >= keyV * 0.6 && hueDist(H[i], keyH) <= tol * 0.5;
 
-  // --- 2) Chetlardan flood fill
+  // --- 2) Yuqori va yon chetlardan flood fill
   const bg = new Uint8Array(n);
   const stack: number[] = [];
   const push = (i: number) => {
@@ -426,10 +446,7 @@ export async function keyToAlpha(input: Buffer) {
       stack.push(i);
     }
   };
-  for (let x = 0; x < w; x++) {
-    push(x);
-    push((h - 1) * w + x);
-  }
+  for (let x = 0; x < w; x++) push(x);
   for (let y = 0; y < h; y++) {
     push(y * w);
     push(y * w + w - 1);
@@ -445,7 +462,7 @@ export async function keyToAlpha(input: Buffer) {
   // --- 3) Yopiq bo'shliqlar
   for (let i = 0; i < n; i++) if (!bg[i] && strong(i)) bg[i] = 1;
 
-  // --- 4) Chet zonasi (fondan 2 px gacha)
+  // --- 4) Chet zonasi (fondan 2 px gacha): yumshoq shaffoflik va spill tozalash
   const near = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     if (!bg[i]) continue;
@@ -460,7 +477,6 @@ export async function keyToAlpha(input: Buffer) {
       }
     }
   }
-
   const alpha = Buffer.alloc(n);
   const rgb = Buffer.alloc(n * 3);
   for (let i = 0; i < n; i++) {
@@ -471,7 +487,6 @@ export async function keyToAlpha(input: Buffer) {
     let a = 255;
     if (bg[i]) a = 0;
     else if (near[i]) {
-      // Fon rangiga qanchalik yaqin bo'lsa, shuncha shaffof va kulrangga yaqinlashtiriladi (spill yo'qoladi)
       const hueK = Math.max(0, 1 - hueDist(H[i], keyH) / (tol * 1.8));
       const satK = Math.min(1, S[i] / Math.max(0.05, keyS));
       const k = hueK * satK;
@@ -483,51 +498,78 @@ export async function keyToAlpha(input: Buffer) {
         b = Math.round(b + (gray - b) * k);
       }
     }
+    // Kalit rang yashil bo'lsa, odamdagi yashil "nur"ni yumshoq olib tashlash (despill)
+    if (a > 0 && near[i] && key.name === 'green' && g > Math.max(r, b)) g =Math.max(r, b) + Math.round((g - Math.max(r, b)) * 0.35);
+    if (a > 0 && key.name === 'magenta') {
+      const m = Math.min(r, b) - g;
+      if (m > 0 && near[i]) {
+        r -= Math.round(m * 0.6);
+        b -= Math.round(m * 0.6);
+      }
+    }
     alpha[i] = a;
     rgb[i * 3] = r;
     rgb[i * 3 + 1] = g;
     rgb[i * 3 + 2] = b;
   }
 
-  // --- 5) Tekshiruv: yuqori/yon chetlar va umumiy maydon shaffof bo'lishi shart
+  // --- 5) Tekshiruv
   let edgeClear = 0;
   for (const i of sample) if (alpha[i] < 40) edgeClear++;
   let clear = 0;
   for (let i = 0; i < n; i++) if (alpha[i] < 40) clear++;
-  const stats = { keyH: Math.round(keyH), keyS: +keyS.toFixed(2), keyV: +keyV.toFixed(2), tol: +tol.toFixed(1), edgeClear: +(edgeClear / sample.length).toFixed(2), clear: +(clear / n).toFixed(2) };
-  if (edgeClear / sample.length < 0.6 || clear / n < 0.08) throw new CutoutError(`Fon to'liq olib tashlanmadi (${JSON.stringify(stats)})`);
+  // Markaziy hudud (odatda yuz va tana) — u bo'shab qolsa, odam ham o'chib ketgan
+  let center = 0;
+  let centerOpaque = 0;
+  for (let y = Math.round(h * 0.25); y < Math.round(h * 0.75); y++)
+    for (let x = Math.round(w * 0.3); x < Math.round(w * 0.7); x++) {
+      center++;
+      if (alpha[y * w + x] > 200) centerOpaque++;
+    }
+  const stats = {
+    key: key.name,
+    keyH: Math.round(keyH),
+    keyS: +keyS.toFixed(2),
+    tol: +tol.toFixed(1),
+    edgeClear: +(edgeClear / sample.length).toFixed(2),
+    clear: +(clear / n).toFixed(2),
+    center: +(centerOpaque / center).toFixed(2),
+  };
+  if (edgeClear / sample.length < 0.6) throw new CutoutError(`Fon to'liq olib tashlanmadi (${JSON.stringify(stats)})`);
+  if (clear / n > 0.9 || centerOpaque / center < 0.2) throw new CutoutError(`Odam ham o'chib ketdi (${JSON.stringify(stats)})`);
+  if (clear / n < 0.05) throw new CutoutError(`Fon topilmadi (${JSON.stringify(stats)})`);
   return { rgb, alpha, w, h, stats };
 }
 
 /**
  * Mijoz rasmidan odam(lar)ni qirqib oladi va shaffof fonli PNG qaytaradi.
- * Bo'sh chetlar kesiladi; rasm chetiga tegib turgan joylar (masalan yelka) yumshoq so'nib boradi —
- * shablonga qo'yilganda tekis kesilgan chiziq ko'rinmaydi.
- * Gemini fonni yaxshi bermasa — bir marta qayta so'raladi; baribir bo'lmasa xato (mijozda asl rasm qoladi).
+ * Bo'sh chetlar kesiladi; rasm chetiga tegib turgan joylar (masalan yelka) yumshoq so'nib boradi.
+ * Natija sifatsiz bo'lsa — ikkinchi kalit rang bilan qayta so'raladi; baribir bo'lmasa xato
+ * (mijozda asl rasm qoladi — hech qachon yarim o'chirilgan rasm qaytmaydi).
  */
 export async function cutoutSubject(input: Buffer): Promise<Buffer> {
   if (!client) throw new Error('AI o\'chirilgan: GEMINI_API_KEY o\'rnatilmagan');
-  const src = await sharp(input).rotate().resize(1536, 1536, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 90 }).toBuffer();
+  const src = await sharp(input).rotate().resize(1536, 1536, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 92 }).toBuffer();
   const meta = await sharp(src).metadata();
+  const keys = await chooseKeys(src);
   const started = Date.now();
-  const ATTEMPTS = 2;
   let lastError = '';
-  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < keys.length; attempt++) {
+    const key = keys[attempt];
     try {
-      const prompt = attempt === 1 ? KEY_PROMPT : `${KEY_PROMPT} ${KEY_PROMPT_STRICT}`;
       const response = await withTimeout(
         client.models.generateContent({
           model: env.GEMINI_IMAGE_MODEL,
-          contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data: src.toString('base64') } }, { text: prompt }] }],
-          config: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { aspectRatio: nearestAspect(meta.width || 1, meta.height || 1) } },
+          contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data: src.toString('base64') } }, { text: cutoutPrompt(key, attempt > 0) }] }],
+          config: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.2, imageConfig: { aspectRatio: nearestAspect(meta.width || 1, meta.height || 1) } },
         }),
         CUTOUT_TIMEOUT_MS,
       );
       const out = (response.candidates?.[0]?.content?.parts ?? []).find((p) => p.inlineData?.data);
       if (!out?.inlineData?.data) throw new CutoutError('Gemini rasm qaytarmadi');
 
-      const { rgb, alpha, w, h, stats } = await keyToAlpha(Buffer.from(out.inlineData.data, 'base64'));
-      logger.info({ attempt, ...stats }, 'Fon olib tashlandi');
+      const { rgb, alpha, w, h, stats } = await keyToAlpha(Buffer.from(out.inlineData.data, 'base64'), key);
+      logger.info({ attempt: attempt + 1, ...stats }, 'Fon olib tashlandi');
 
       // Ob'ekt chegarasi (bo'sh shaffof chetlarni kesish uchun)
       let minX = w, minY = h, maxX = -1, maxY = -1;
@@ -541,7 +583,7 @@ export async function cutoutSubject(input: Buffer): Promise<Buffer> {
           }
         }
       }
-      if (maxX < 0 || (maxX - minX) * (maxY - minY) < w * h * 0.02) throw new CutoutError('Rasmda odam topilmadi');
+      if (maxX < 0 || (maxX - minX) * (maxY - minY) < w * h * 0.05) throw new CutoutError('Rasmda odam topilmadi');
 
       // Chetga tegib turgan tomonlar yumshoq so'nadi (tekis kesilgan chiziq qolmasin)
       const fadeEdge = (touch: boolean, len: number, fn: (k: number, t: number) => void) => {
@@ -577,7 +619,7 @@ export async function cutoutSubject(input: Buffer): Promise<Buffer> {
       return png;
     } catch (err) {
       lastError = (err as Error)?.message?.slice(0, 500) || 'Noma\'lum xato';
-      logger.warn({ err: lastError, attempt }, 'Fonni olib tashlab bo\'lmadi');
+      logger.warn({ err: lastError, attempt: attempt + 1, key: key.name }, 'Fonni olib tashlab bo\'lmadi');
       // Faqat natija sifatsiz bo'lsa qayta urinamiz (timeout/kalit xatosida emas)
       if (!(err instanceof CutoutError)) break;
     }

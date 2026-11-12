@@ -6,6 +6,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { webhookCallback } from 'grammy';
 import { logger } from './logger';
@@ -53,6 +54,9 @@ function buildApp() {
       },
     }),
   );
+  // JS/CSS/JSON siqib yuboriladi (~3-4 barobar kichik) — mini app tezroq ochiladi.
+  // Rasmlar (webp/jpg/png) allaqachon siqilgan, ularga tegilmaydi.
+  app.use(compression({ threshold: 1024, filter: (req, res) => !req.path.startsWith('/uploads/') && compression.filter(req, res) }));
   app.use(cors({ origin: env.WEBAPP_URL, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());

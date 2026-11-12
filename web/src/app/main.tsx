@@ -7,10 +7,12 @@ import '../shared/i18n';
 import { initTelegram } from '../shared/telegram';
 import { applyTheme } from '../shared/theme';
 import { ToastProvider } from '../shared/ui';
+import { BASE_FONTS_CSS, loadFontCss } from '../shared/fonts';
 import { App } from './App';
 
 applyTheme();
 initTelegram();
+void loadFontCss(BASE_FONTS_CSS);
 
 const queryClient = new QueryClient({
   defaultOptions: {

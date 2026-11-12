@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Ban, Send, Smartphone } from 'lucide-react';
 import { get } from '../shared/api';
@@ -17,7 +17,13 @@ const AdminMiniApp = lazy(() => import('./staff/AdminMiniApp').then((m) => ({ de
 
 export function App() {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const me = useQuery({ queryKey: ['me'], queryFn: () => get<Me>('/auth/me'), enabled: isTelegram, staleTime: 60_000 });
+
+  // Bosh sahifa ma'lumoti /auth/me bilan bir vaqtda so'raladi (ketma-ket kutmasdan)
+  useEffect(() => {
+    if (isTelegram) void qc.prefetchQuery({ queryKey: ['home'], queryFn: () => get('/catalog/home'), staleTime: 15_000 });
+  }, [qc]);
 
   useEffect(() => {
     if (me.data?.kind === 'tg' && me.data.language) setLanguage(me.data.language);

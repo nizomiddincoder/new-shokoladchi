@@ -44,6 +44,7 @@ import {
   renderDesign,
 } from '../../shared/personalRender';
 import { money, unitLabel } from '../../shared/format';
+import { PERSONAL_FONTS_CSS, loadFontCss } from '../../shared/fonts';
 import { haptic } from '../../shared/telegram';
 import { PageHeader } from '../layout';
 
@@ -120,9 +121,10 @@ export function PersonalPage() {
 
   // Barcha shriftlarni oldindan yuklab olamiz — keyin chizish sinxron va tez
   useEffect(() => {
-    void ensureFonts({ photo: null, layers: (Object.keys(FONTS) as FontKey[]).map((font) => ({ id: font, kind: 'text', x: 0, y: 0, s: 0, rot: 0, font })) }).then(() =>
-      setFontsTick((n) => n + 1),
-    );
+    const all = { photo: null, layers: (Object.keys(FONTS) as FontKey[]).map((font) => ({ id: font, kind: 'text' as const, x: 0, y: 0, s: 0, rot: 0, font })) };
+    void loadFontCss(PERSONAL_FONTS_CSS)
+      .then(() => ensureFonts(all))
+      .then(() => setFontsTick((n) => n + 1));
   }, []);
 
   useEffect(() => {
