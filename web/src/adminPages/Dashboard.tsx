@@ -101,7 +101,7 @@ export function DashboardPage() {
                       </tr>
                     )}
                     {d.topProducts.map((p, i) => (
-                      <tr key={p.productId}>
+                      <tr key={`${p.productId ?? 'x'}-${p.name}`}>
                         <td className="font-bold text-muted">{i + 1}</td>
                         <td className="font-semibold">{p.name}</td>
                         <td className="text-right">{qty(p.qty)}</td>

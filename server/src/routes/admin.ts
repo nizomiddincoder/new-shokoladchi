@@ -17,6 +17,7 @@ import { dashboardStats, resolveRange } from '../services/stats';
 import { buildExport, type ExportType } from '../services/export';
 import { aiEnabled, aiMonthlyStats, enqueueCategoryImage, generateBanner } from '../services/ai';
 import { guessCategoryIcon } from '../lib/categoryIcon';
+import { resetData } from '../services/reset';
 import { enqueueTranslation } from '../services/translate';
 import { runBroadcasts, segmentWhere } from '../services/broadcast';
 import { bot, safeCall } from '../bot/instance';
@@ -765,6 +766,27 @@ adminRouter.get(
   ah(async (_req, res) => {
     const r = await missingUploads();
     res.json({ ...r, volume: !!process.env.RAILWAY_VOLUME_MOUNT_PATH || !env.isProd });
+  }),
+);
+
+// ================= MA'LUMOTLARNI TOZALASH (0 holat) =================
+adminRouter.post(
+  '/reset',
+  ah(async (req, res) => {
+    const body = z
+      .object({
+        orders: z.boolean().default(false),
+        catalog: z.boolean().default(false),
+        customers: z.boolean().default(false),
+        stock: z.boolean().default(false),
+        confirm: z.string(),
+      })
+      .parse(req.body);
+    if (body.confirm.trim().toUpperCase() !== 'TOZALASH') throw badRequest('CONFIRM', 'Tasdiqlash uchun TOZALASH so\'zini yozing');
+    const { confirm, ...opts } = body;
+    void confirm;
+    const done = await resetData(opts, req.actor!);
+    res.json({ ok: true, done });
   }),
 );
 

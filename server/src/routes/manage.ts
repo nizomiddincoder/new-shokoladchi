@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { ah, badRequest, notFound } from '../lib/errors';
-import { requireRole } from '../lib/auth';
+import { requireRole, type Actor } from '../lib/auth';
 import { audit } from '../lib/audit';
 import { imageUpload } from '../lib/upload';
 import { PRODUCT_INCLUDE, imageDto, productDto } from '../lib/dto';
@@ -227,24 +227,42 @@ manageRouter.post(
   }),
 );
 
+/**
+ * Mahsulotlarni butunlay o'chiradi. Eski buyurtmalarda nomi va narxi (nusxa) saqlanib qoladi,
+ * savatcha/sevimlilar/qoldiq tarixi va shu mahsulot shablonlari ham o'chadi.
+ */
+async function deleteProducts(ids: number[], actor: Actor) {
+  const products = await prisma.product.findMany({
+    where: { id: { in: ids } },
+    include: { images: true, personalTemplates: { select: { imageUrl: true } } },
+  });
+  if (!products.length) return 0;
+  await prisma.product.deleteMany({ where: { id: { in: products.map((p) => p.id) } } });
+  for (const p of products) {
+    for (const i of p.images) await removeUpload(i.originalUrl, i.originalThumb, i.aiUrl, i.aiThumb);
+    for (const tpl of p.personalTemplates) await removeUpload(tpl.imageUrl);
+    await audit(actor, 'product.delete', 'Product', p.id, { nameUz: p.nameUz }, null);
+  }
+  return products.length;
+}
+
 manageRouter.delete(
   '/products/:id',
   requireRole('ADMIN'),
   ah(async (req, res) => {
-    const id = Number(req.params.id);
-    const p = await prisma.product.findUnique({ where: { id }, include: { images: true } });
-    if (!p) throw notFound();
-    const used =
-      (await prisma.orderItem.count({ where: { productId: id } })) + (await prisma.personalTemplate.count({ where: { productId: id } }));
-    if (used > 0) {
-      await prisma.product.update({ where: { id }, data: { isActive: false } });
-      await audit(req.actor!, 'product.deactivate', 'Product', id, null, { reason: 'has orders' });
-      return res.json({ ok: true, deactivated: true });
-    }
-    await prisma.product.delete({ where: { id } });
-    for (const i of p.images) await removeUpload(i.originalUrl, i.originalThumb, i.aiUrl, i.aiThumb);
-    await audit(req.actor!, 'product.delete', 'Product', id, { nameUz: p.nameUz }, null);
-    res.json({ ok: true, deleted: true });
+    const deleted = await deleteProducts([Number(req.params.id)], req.actor!);
+    if (!deleted) throw notFound();
+    res.json({ ok: true, deleted });
+  }),
+);
+
+manageRouter.post(
+  '/products/bulk-delete',
+  requireRole('ADMIN'),
+  ah(async (req, res) => {
+    const { ids } = z.object({ ids: z.array(z.number().int().positive()).min(1).max(1000) }).parse(req.body);
+    const deleted = await deleteProducts(ids, req.actor!);
+    res.json({ ok: true, deleted });
   }),
 );
 

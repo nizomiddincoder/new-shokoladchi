@@ -277,7 +277,7 @@ customerRouter.post(
     for (const it of o.items) {
       const p = it.product;
       // Shaxsiy rasmli shokolad qayta buyurtmada savatchaga tushmaydi (yangi dizayn kerak)
-      if (it.designUrl) {
+      if (it.designUrl || !p) {
         skipped.push(it.nameSnapshot);
         continue;
       }

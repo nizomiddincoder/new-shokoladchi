@@ -291,255 +291,189 @@ export async function resumePendingAi() {
 }
 
 // ================= "MENING SHOKOLADIM": FONNI OLIB TASHLASH =================
-//
-// Gemini rasmni QAYTA CHIZMAYDI: u faqat odamning niqobini (segmentation mask) qaytaradi —
-// qaysi piksel odamga tegishli. Niqob asl rasmga qo'llanadi, shuning uchun yuz, teri, kiyim
-// asl holicha qoladi (rang sachrashi, xiralashish, "boshqa odam" bo'lib qolish bo'lmaydi).
-// Niqob chetlari asl rasmdagi qirralar bo'yicha aniqlashtiriladi (guided filter) — soch, yelka toza chiqadi.
 
-const SEG_TIMEOUT_MS = 45_000;
+const CUTOUT_TIMEOUT_MS = 60_000;
 const CUTOUT_MAX = 1400;
-/** Segmentatsiya uchun rasm o'lchami (Gemini tavsiyasi ~1024) */
-const SEG_INPUT = 1024;
+/** Kalit rang: odamlar suratida deyarli uchramaydigan sof magenta */
+// Oddiy buyruq: "orqa fonni tozalab ber". Magenta rang — faqat fonni shaffof qilish uchun texnik belgi.
+const KEY_PROMPT = 'Remove the background from this photo. Make the background solid magenta (#FF00FF).';
 
-function segPrompt(retry: boolean) {
-  return [
-    'Give the segmentation mask of the person (or people) in this photo.',
-    'Each mask must cover the WHOLE person as one object: head, all of the hair, face, ears, neck, shoulders, arms, hands, body and all clothes, plus anything the person is holding.',
-    'Do NOT include anything from the background: walls, shelves, lamps, furniture, products, other blurred objects.',
-    'If there are no people, give the mask of the single main foreground subject (pet or object) instead.',
-    'Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key "box_2d", the segmentation mask in key "mask", and the text label in the key "label".',
-    retry ? 'Be precise: the previous mask was incomplete or included background. Cover the entire person and nothing else.' : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+/** Rasm nisbatiga eng yaqin Gemini formatini tanlaydi */
+function nearestAspect(w: number, h: number) {
+  const options: [string, number][] = [
+    ['1:1', 1],
+    ['3:4', 3 / 4],
+    ['4:3', 4 / 3],
+    ['9:16', 9 / 16],
+    ['16:9', 16 / 9],
+    ['2:3', 2 / 3],
+    ['3:2', 3 / 2],
+  ];
+  const r = w / h;
+  return options.reduce((best, o) => (Math.abs(Math.log(o[1] / r)) < Math.abs(Math.log(best[1] / r)) ? o : best))[0];
 }
 
-export class CutoutError extends Error {}
-
-type SegItem = { box_2d: number[]; mask: string; label?: string };
-
-/** Gemini javobidan JSON ro'yxatni ajratib oladi (```json ... ``` bo'lsa ham) */
-export function parseSegments(text: string): SegItem[] {
-  const t = text.trim();
-  const s = t.indexOf('[');
-  const e = t.lastIndexOf(']');
-  if (s < 0 || e <= s) throw new CutoutError('Gemini niqob qaytarmadi');
-  let arr: unknown;
-  try {
-    arr = JSON.parse(t.slice(s, e + 1));
-  } catch {
-    throw new CutoutError('Gemini javobini o\'qib bo\'lmadi');
+/**
+ * Magenta fonni shaffoflikka aylantiradi:
+ *  1) chetlardan boshlab kuchli magenta piksellarni "flood fill" bilan fon deb belgilaymiz
+ *     (ichkaridagi binafsha kiyim kabi narsalar saqlanib qoladi);
+ *  2) juda sof magenta (masalan qo'l va tana orasidagi bo'shliq) ham fon;
+ *  3) fonga tegib turgan chet piksellar yumshoq shaffof bo'ladi va pushti "dog'" olib tashlanadi.
+ */
+export async function magentaToAlpha(input: Buffer) {
+  const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width: w, height: h } = info;
+  const n = w * h;
+  const m = new Int16Array(n); // magenta kuchi: min(r,b) - g
+  for (let i = 0; i < n; i++) {
+    const o = i * 4;
+    m[i] = Math.min(data[o], data[o + 2]) - data[o + 1];
   }
-  if (!Array.isArray(arr)) throw new CutoutError('Gemini niqob qaytarmadi');
-  return (arr as SegItem[]).filter((x) => Array.isArray(x?.box_2d) && x.box_2d.length === 4 && typeof x?.mask === 'string' && x.mask.length > 20);
-}
-
-/** Niqoblarni (har biri o'z qutisida) to'liq rasm o'lchamidagi bitta niqobga yig'adi: 0..1 */
-export async function assembleMask(items: SegItem[], W: number, H: number): Promise<Float32Array> {
-  const mask = new Float32Array(W * H);
-  for (const it of items) {
-    const [y0, x0, y1, x1] = it.box_2d.map(Number);
-    const left = Math.max(0, Math.round((Math.min(x0, x1) / 1000) * W));
-    const top = Math.max(0, Math.round((Math.min(y0, y1) / 1000) * H));
-    const right = Math.min(W, Math.round((Math.max(x0, x1) / 1000) * W));
-    const bottom = Math.min(H, Math.round((Math.max(y0, y1) / 1000) * H));
-    const bw = right - left;
-    const bh = bottom - top;
-    if (bw < 4 || bh < 4) continue;
-    let raw: Buffer;
-    try {
-      const png = Buffer.from(it.mask.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-      raw = await sharp(png).removeAlpha().toColourspace('b-w').resize(bw, bh, { fit: 'fill', kernel: 'cubic' }).raw().toBuffer();
-    } catch {
-      continue;
+  const SEED = 110;
+  const PURE = 190;
+  const bg = new Uint8Array(n);
+  const stack: number[] = [];
+  const push = (i: number) => {
+    if (!bg[i] && m[i] > SEED) {
+      bg[i] = 1;
+      stack.push(i);
     }
-    for (let y = 0; y < bh; y++) {
-      for (let x = 0; x < bw; x++) {
-        // Ehtimollik xaritasi: ~0.5 chegarasi atrofida yumshoq o'tish
-        const v = Math.max(0, Math.min(1, (raw[y * bw + x] / 255 - 0.3) / 0.4));
-        const i = (top + y) * W + left + x;
-        if (v > mask[i]) mask[i] = v;
+  };
+  for (let x = 0; x < w; x++) {
+    push(x);
+    push((h - 1) * w + x);
+  }
+  for (let y = 0; y < h; y++) {
+    push(y * w);
+    push(y * w + w - 1);
+  }
+  while (stack.length) {
+    const i = stack.pop()!;
+    const x = i % w;
+    if (x > 0) push(i - 1);
+    if (x < w - 1) push(i + 1);
+    if (i >= w) push(i - w);
+    if (i < n - w) push(i + w);
+  }
+  for (let i = 0; i < n; i++) if (m[i] > PURE) bg[i] = 1;
+
+  // Fonga yaqin (2 px) piksellar — chet zonasi
+  const near = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (!bg[i]) continue;
+    const x = i % w;
+    const y = (i - x) / w;
+    for (let dy = -2; dy <= 2; dy++) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= h) continue;
+      for (let dx = -2; dx <= 2; dx++) {
+        const xx = x + dx;
+        if (xx >= 0 && xx < w) near[yy * w + xx] = 1;
       }
     }
   }
-  return mask;
-}
 
-/** Tez o'rtacha filtr (integral rasm orqali), radius r */
-function boxFilter(src: Float32Array, w: number, h: number, r: number): Float32Array {
-  const W1 = w + 1;
-  const I = new Float64Array(W1 * (h + 1));
-  for (let y = 0; y < h; y++) {
-    let row = 0;
-    for (let x = 0; x < w; x++) {
-      row += src[y * w + x];
-      I[(y + 1) * W1 + x + 1] = I[y * W1 + x + 1] + row;
-    }
-  }
-  const out = new Float32Array(w * h);
-  for (let y = 0; y < h; y++) {
-    const ya = Math.max(0, y - r);
-    const yb = Math.min(h - 1, y + r);
-    for (let x = 0; x < w; x++) {
-      const xa = Math.max(0, x - r);
-      const xb = Math.min(w - 1, x + r);
-      const sum = I[(yb + 1) * W1 + xb + 1] - I[ya * W1 + xb + 1] - I[(yb + 1) * W1 + xa] + I[ya * W1 + xa];
-      out[y * w + x] = sum / ((yb - ya + 1) * (xb - xa + 1));
-    }
-  }
-  return out;
-}
-
-/**
- * Guided filter (He va boshq.): qo'pol niqobni asl rasmdagi qirralarga "yopishtiradi".
- * Natija: soch, yelka va kiyim chetlari asl rasmdagi chegaraga mos, yumshoq va aniq.
- */
-export function refineMask(gray: Float32Array, p: Float32Array, w: number, h: number) {
-  const r = Math.max(4, Math.round(Math.min(w, h) * 0.008));
-  const eps = 1e-3;
-  const n = w * h;
-  const Ip = new Float32Array(n);
-  const II = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    Ip[i] = gray[i] * p[i];
-    II[i] = gray[i] * gray[i];
-  }
-  const mI = boxFilter(gray, w, h, r);
-  const mP = boxFilter(p, w, h, r);
-  const mIp = boxFilter(Ip, w, h, r);
-  const mII = boxFilter(II, w, h, r);
-  const a = new Float32Array(n);
-  const b = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const varI = mII[i] - mI[i] * mI[i];
-    a[i] = (mIp[i] - mI[i] * mP[i]) / (varI + eps);
-    b[i] = mP[i] - a[i] * mI[i];
-  }
-  const mA = boxFilter(a, w, h, r);
-  const mB = boxFilter(b, w, h, r);
-  // Faqat chet zonasida aniqlashtiramiz: niqobning ichi to'liq, tashqarisi to'liq shaffof qoladi
-  const band = boxFilter(p, w, h, r * 2);
   const alpha = Buffer.alloc(n);
+  const rgb = Buffer.alloc(n * 3);
   for (let i = 0; i < n; i++) {
-    let v: number;
-    if (band[i] >= 0.995) v = 1;
-    else if (band[i] <= 0.005) v = 0;
-    else v = Math.max(0, Math.min(1, mA[i] * gray[i] + mB[i]));
-    alpha[i] = Math.round(v * 255);
+    const o = i * 4;
+    let r = data[o];
+    const g = data[o + 1];
+    let b = data[o + 2];
+    let a = 255;
+    if (bg[i]) a = 0;
+    else if (near[i] && m[i] > 30) {
+      // Chet: magenta qancha ko'p bo'lsa, shuncha shaffof; rang "tozalanadi"
+      a = Math.round(255 * Math.max(0, Math.min(1, (PURE - m[i]) / (PURE - 30))));
+      r = Math.max(g, r - m[i]);
+      b = Math.max(g, b - m[i]);
+    }
+    alpha[i] = a;
+    rgb[i * 3] = r;
+    rgb[i * 3 + 1] = g;
+    rgb[i * 3 + 2] = b;
   }
-  return alpha;
-}
-
-async function requestSegments(img: Buffer, retry: boolean): Promise<SegItem[]> {
-  if (!client) throw new Error('AI o\'chirilgan: GEMINI_API_KEY o\'rnatilmagan');
-  const response = await withTimeout(
-    client.models.generateContent({
-      model: env.GEMINI_SEGMENT_MODEL,
-      contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data: img.toString('base64') } }, { text: segPrompt(retry) }] }],
-      // Segmentatsiya uchun "o'ylash" o'chiriladi — Google tavsiyasi, natija aniqroq va tezroq
-      config: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
-    }),
-    SEG_TIMEOUT_MS,
-  );
-  const items = parseSegments(response.text || '');
-  if (!items.length) throw new CutoutError('Rasmda odam topilmadi');
-  return items;
+  return { rgb, alpha, w, h };
 }
 
 /**
- * Mijoz rasmidan odam(lar)ni qirqib oladi va shaffof fonli PNG qaytaradi (asl piksellar bilan).
- * Bo'sh chetlar kesiladi; rasm chetiga tegib turgan joylar (masalan yelka) yumshoq so'nib boradi.
- * Niqob sifatsiz bo'lsa bir marta qayta so'raladi; baribir bo'lmasa xato — mijozda asl rasm qoladi.
+ * Mijoz rasmidan odam(lar)ni qirqib oladi va shaffof fonli PNG qaytaradi.
+ * Bo'sh chetlar kesiladi; rasm chetiga tegib turgan joylar (masalan yelka) yumshoq so'nib boradi —
+ * shablonga qo'yilganda tekis kesilgan chiziq ko'rinmaydi.
  */
 export async function cutoutSubject(input: Buffer): Promise<Buffer> {
   if (!client) throw new Error('AI o\'chirilgan: GEMINI_API_KEY o\'rnatilmagan');
-  // Asl rasm (to'g'ri burilgan, o'lchami cheklangan) — natija shu piksellardan olinadi
-  const { data: rgb, info } = await sharp(input)
-    .rotate()
-    .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
-    .flatten({ background: '#ffffff' })
-    .removeAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const w = info.width;
-  const h = info.height;
-  const n = w * h;
-  const forModel = await sharp(rgb, { raw: { width: w, height: h, channels: 3 } })
-    .resize(SEG_INPUT, SEG_INPUT, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 90 })
-    .toBuffer();
-  const gray = new Float32Array(n);
-  for (let i = 0; i < n; i++) gray[i] = (0.299 * rgb[i * 3] + 0.587 * rgb[i * 3 + 1] + 0.114 * rgb[i * 3 + 2]) / 255;
-
+  const src = await sharp(input).rotate().resize(1536, 1536, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 90 }).toBuffer();
+  const meta = await sharp(src).metadata();
   const started = Date.now();
-  let lastError = '';
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const items = await requestSegments(forModel, attempt > 0);
-      const coarse = await assembleMask(items, w, h);
-      const alpha = refineMask(gray, coarse, w, h);
+  try {
+    const response = await withTimeout(
+      client.models.generateContent({
+        model: env.GEMINI_IMAGE_MODEL,
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data: src.toString('base64') } }, { text: KEY_PROMPT }] }],
+        config: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { aspectRatio: nearestAspect(meta.width || 1, meta.height || 1) } },
+      }),
+      CUTOUT_TIMEOUT_MS,
+    );
+    const out = (response.candidates?.[0]?.content?.parts ?? []).find((p) => p.inlineData?.data);
+    if (!out?.inlineData?.data) throw new Error('Gemini rasm qaytarmadi');
 
-      // Tekshiruv: odam juda kichik yoki butun rasm bo'lib qolmasin
-      let opaque = 0;
-      let minX = w, minY = h, maxX = -1, maxY = -1;
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const a = alpha[y * w + x];
-          if (a > 128) opaque++;
-          if (a > 24) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
+    const { rgb, alpha, w, h } = await magentaToAlpha(Buffer.from(out.inlineData.data, 'base64'));
+
+    // Ob'ekt chegarasi (bo'sh shaffof chetlarni kesish uchun)
+    let minX = w, minY = h, maxX = -1, maxY = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (alpha[y * w + x] > 24) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
         }
       }
-      const frac = opaque / n;
-      logger.info({ attempt: attempt + 1, masks: items.length, labels: items.map((i) => i.label).slice(0, 5), frac: +frac.toFixed(2) }, 'Odam niqobi olindi');
-      if (maxX < 0 || frac < 0.04) throw new CutoutError('Rasmda odam topilmadi');
-      if (frac > 0.95) throw new CutoutError('Niqob butun rasmni qopladi');
-
-      // Chetga tegib turgan tomonlar yumshoq so'nadi (tekis kesilgan chiziq qolmasin)
-      const fadeEdge = (touch: boolean, len: number, fn: (k: number, t: number) => void) => {
-        if (!touch || len < 4) return;
-        for (let k = 0; k < len; k++) fn(k, (k + 1) / (len + 1));
-      };
-      const fy = Math.round(h * 0.08);
-      const fx = Math.round(w * 0.04);
-      fadeEdge(maxY >= h - 3, fy, (k, t) => {
-        const y = h - 1 - k;
-        for (let x = 0; x < w; x++) alpha[y * w + x] = Math.round(alpha[y * w + x] * t);
-      });
-      fadeEdge(minX <= 2, fx, (k, t) => {
-        for (let y = 0; y < h; y++) alpha[y * w + k] = Math.round(alpha[y * w + k] * t);
-      });
-      fadeEdge(maxX >= w - 3, fx, (k, t) => {
-        const x = w - 1 - k;
-        for (let y = 0; y < h; y++) alpha[y * w + x] = Math.round(alpha[y * w + x] * t);
-      });
-
-      const pad = 4;
-      const left = Math.max(0, minX - pad);
-      const top = Math.max(0, minY - pad);
-      const png = await sharp(rgb, { raw: { width: w, height: h, channels: 3 } })
-        .joinChannel(alpha, { raw: { width: w, height: h, channels: 1 } })
-        .extract({ left, top, width: Math.min(w, maxX + pad + 1) - left, height: Math.min(h, maxY + pad + 1) - top })
-        .resize(CUTOUT_MAX, CUTOUT_MAX, { fit: 'inside', withoutEnlargement: true })
-        .png({ compressionLevel: 8 })
-        .toBuffer();
-      await prisma.aiCall.create({ data: { model: env.GEMINI_SEGMENT_MODEL, success: true, durationMs: Date.now() - started } });
-      return png;
-    } catch (err) {
-      lastError = (err as Error)?.message?.slice(0, 500) || 'Noma\'lum xato';
-      logger.warn({ err: lastError, attempt: attempt + 1 }, 'Fonni olib tashlab bo\'lmadi');
-      if (!(err instanceof CutoutError)) break;
     }
+    if (maxX < 0 || (maxX - minX) * (maxY - minY) < w * h * 0.02) throw new Error('Rasmda odam topilmadi');
+
+    // Chetga tegib turgan tomonlar yumshoq so'nadi (tekis kesilgan chiziq qolmasin)
+    const fadeEdge = (touch: boolean, len: number, fn: (k: number, t: number) => void) => {
+      if (!touch || len < 4) return;
+      for (let k = 0; k < len; k++) fn(k, (k + 1) / (len + 1));
+    };
+    const fy = Math.round(h * 0.09);
+    const fx = Math.round(w * 0.05);
+    fadeEdge(maxY >= h - 3, fy, (k, t) => {
+      const y = h - 1 - k;
+      for (let x = 0; x < w; x++) alpha[y * w + x] = Math.round(alpha[y * w + x] * t);
+    });
+    fadeEdge(minX <= 2, fx, (k, t) => {
+      for (let y = 0; y < h; y++) alpha[y * w + k] = Math.round(alpha[y * w + k] * t);
+    });
+    fadeEdge(maxX >= w - 3, fx, (k, t) => {
+      const x = w - 1 - k;
+      for (let y = 0; y < h; y++) alpha[y * w + x] = Math.round(alpha[y * w + x] * t);
+    });
+
+    // Chetlarni biroz silliqlash
+    const softAlpha = await sharp(alpha, { raw: { width: w, height: h, channels: 1 } }).blur(0.6).raw().toBuffer();
+    const pad = 4;
+    const left = Math.max(0, minX - pad);
+    const top = Math.max(0, minY - pad);
+    const png = await sharp(rgb, { raw: { width: w, height: h, channels: 3 } })
+      .joinChannel(softAlpha, { raw: { width: w, height: h, channels: 1 } })
+      .extract({ left, top, width: Math.min(w, maxX + pad + 1) - left, height: Math.min(h, maxY + pad + 1) - top })
+      .resize(CUTOUT_MAX, CUTOUT_MAX, { fit: 'inside', withoutEnlargement: true })
+      .png({ compressionLevel: 8 })
+      .toBuffer();
+    await prisma.aiCall.create({ data: { model: env.GEMINI_IMAGE_MODEL, success: true, durationMs: Date.now() - started } });
+    return png;
+  } catch (err) {
+    const message = (err as Error)?.message?.slice(0, 500) || 'Noma\'lum xato';
+    await prisma.aiCall
+      .create({ data: { model: env.GEMINI_IMAGE_MODEL, success: false, error: `cutout: ${message}`, durationMs: Date.now() - started } })
+      .catch(() => undefined);
+    logger.warn({ err: message }, 'Fonni olib tashlab bo\'lmadi');
+    throw new Error(message);
   }
-  await prisma.aiCall
-    .create({ data: { model: env.GEMINI_SEGMENT_MODEL, success: false, error: `cutout: ${lastError}`, durationMs: Date.now() - started } })
-    .catch(() => undefined);
-  throw new Error(lastError);
 }
 
 export async function aiMonthlyStats() {

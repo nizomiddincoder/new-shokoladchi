@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Download, FileSpreadsheet, History, ImageOff, ImagePlus, Send, Sparkles } from 'lucide-react';
+import { Download, FileSpreadsheet, History, ImageOff, ImagePlus, Send, Sparkles, Trash2 } from 'lucide-react';
 import { get, post, put, qs, upload } from '../shared/api';
 import { ShopLogo, type Branding } from '../shared/branding';
 import type { AuditEntry, Paged, Settings } from '../shared/types';
-import { Badge, Button, Card, Empty, ErrorState, Field, PageLoader, Pager, Stat, useToast } from '../shared/ui';
+import { Badge, Button, Card, Empty, ErrorState, Field, Modal, PageLoader, Pager, Stat, clsx, useToast } from '../shared/ui';
 import { MapView } from '../shared/MapView';
 import { dateTime, todayISO } from '../shared/format';
 import { AdminPage, TableWrap, useAdminEnv } from './common';
@@ -159,6 +159,7 @@ export function SettingsPage() {
           </Card>
           <StorageHealthCard />
           <Button block size="lg" loading={busy} onClick={() => save()}>{t('common.save')}</Button>
+          <ResetDataCard />
         </div>
       </div>
     </AdminPage>
@@ -178,6 +179,90 @@ const FIX_PATH: Record<StorageHealth['missing'][number]['kind'], (id: number | n
   product: (id) => `/products/${id}`,
   template: () => '/templates',
 };
+
+type ResetKey = 'orders' | 'catalog' | 'customers' | 'stock';
+
+/** Test ma'lumotlarini tozalash: dasturni 0 holatga keltirish */
+function ResetDataCard() {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [word, setWord] = useState('');
+  const [opts, setOpts] = useState<Record<ResetKey, boolean>>({ orders: true, catalog: true, customers: true, stock: false });
+  const toggle = (k: ResetKey, v: boolean) =>
+    setOpts((o) => {
+      const n = { ...o, [k]: v };
+      if (k === 'customers' && v) n.orders = true; // mijozlarsiz buyurtma qolmaydi
+      if (k === 'orders' && !v) n.customers = false;
+      return n;
+    });
+  const any = opts.orders || opts.catalog || opts.customers || opts.stock;
+  const run = async () => {
+    setBusy(true);
+    try {
+      await post('/admin/reset', { ...opts, confirm: word });
+      toast.success(t('admin.resetDone'));
+      setOpen(false);
+      setWord('');
+      await qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const items: { key: ResetKey; label: string; hint: string; disabled?: boolean }[] = [
+    { key: 'orders', label: t('admin.resetOrders'), hint: t('admin.resetOrdersHint') },
+    { key: 'catalog', label: t('admin.resetCatalog'), hint: t('admin.resetCatalogHint') },
+    { key: 'customers', label: t('admin.resetCustomers'), hint: t('admin.resetCustomersHint') },
+    { key: 'stock', label: t('admin.resetStock'), hint: t('admin.resetStockHint'), disabled: opts.catalog },
+  ];
+  return (
+    <Card className="border border-danger/40 p-4">
+      <h3 className="mb-1 flex items-center gap-2 text-[15px] font-bold text-danger">
+        <Trash2 className="h-4 w-4" /> {t('admin.resetTitle')}
+      </h3>
+      <p className="mb-3 text-[13px] text-muted">{t('admin.resetText')}</p>
+      <Button block variant="danger" icon={Trash2} onClick={() => setOpen(true)}>{t('admin.resetOpen')}</Button>
+      <Modal
+        open={open}
+        onClose={() => !busy && setOpen(false)}
+        title={t('admin.resetTitle')}
+        footer={
+          <div className="pb-2">
+            <Button block variant="danger" loading={busy} disabled={!any || word.trim().toUpperCase() !== 'TOZALASH'} onClick={run}>
+              {t('admin.resetRun')}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          {items.map((it) => (
+            <label key={it.key} className={clsx('flex gap-3 rounded-xl border border-line p-3', it.disabled && 'opacity-40')}>
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-danger"
+                disabled={it.disabled}
+                checked={!it.disabled && opts[it.key]}
+                onChange={(e) => toggle(it.key, e.target.checked)}
+              />
+              <span>
+                <span className="block text-[14px] font-bold">{it.label}</span>
+                <span className="block text-[12px] text-muted">{it.hint}</span>
+              </span>
+            </label>
+          ))}
+          <div className="rounded-xl bg-danger-soft p-3 text-[13px] font-semibold text-danger">{t('admin.resetWarn')}</div>
+          <Field label={t('admin.resetConfirmLabel')}>
+            <input className="input" value={word} onChange={(e) => setWord(e.target.value)} placeholder="TOZALASH" autoComplete="off" />
+          </Field>
+        </div>
+      </Modal>
+    </Card>
+  );
+}
 
 /** Serverda topilmagan rasmlar: ularni qayta yuklash kerak */
 function StorageHealthCard() {

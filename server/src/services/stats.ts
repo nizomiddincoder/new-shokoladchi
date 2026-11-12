@@ -64,12 +64,13 @@ export async function dashboardStats(start: Date, end: Date) {
     GROUP BY h ORDER BY h`;
   const hourSeries = Array.from({ length: 24 }, (_, h) => ({ hour: h, orders: n(hours.find((x) => x.h === h)?.orders) }));
 
-  const topProducts = await prisma.$queryRaw<{ productId: number; name: string; unit: string; qty: unknown; revenue: bigint }[]>`
+  // O'chirilgan mahsulotlar (productId NULL) nomi bo'yicha alohida guruhlanadi
+  const topProducts = await prisma.$queryRaw<{ productId: number | null; name: string; unit: string; qty: unknown; revenue: bigint }[]>`
     SELECT i."productId" AS "productId", MAX(i."nameSnapshot") AS name, MAX(i.unit::text) AS unit,
       SUM(COALESCE(i."finalQty", i.qty)) AS qty, SUM(i."lineTotal")::bigint AS revenue
     FROM "OrderItem" i JOIN "Order" o ON o.id = i."orderId"
     WHERE ${completed} AND o."createdAt" >= ${start} AND o."createdAt" < ${end}
-    GROUP BY i."productId" ORDER BY revenue DESC LIMIT 10`;
+    GROUP BY i."productId", CASE WHEN i."productId" IS NULL THEN i."nameSnapshot" END ORDER BY revenue DESC LIMIT 10`;
 
   const sellers = await prisma.$queryRaw<
     { id: number; name: string; accepted: bigint; completed: bigint; revenue: bigint; avg_accept_min: number | null }[]

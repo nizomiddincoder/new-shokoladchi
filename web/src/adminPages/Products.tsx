@@ -213,6 +213,7 @@ export function ProductsPage() {
   const [selected, setSelected] = useState<number[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [toDelete, setToDelete] = useState<Product | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
   const { isWeb } = useAdminEnv();
@@ -240,9 +241,21 @@ export function ProductsPage() {
   const remove = async () => {
     if (!toDelete) return;
     try {
-      const r = await del<{ deactivated?: boolean }>(`/manage/products/${toDelete.id}`);
-      toast.success(r.deactivated ? t('common.inactive') : t('common.saved'));
+      await del(`/manage/products/${toDelete.id}`);
+      toast.success(t('admin.deletedCount', { count: 1 }));
+      setSelected((s) => s.filter((x) => x !== toDelete.id));
       setToDelete(null);
+      await qc.invalidateQueries({ queryKey: ['manage-products'] });
+    } catch (e) {
+      toast.error(e);
+    }
+  };
+  const removeSelected = async () => {
+    try {
+      const r = await post<{ deleted: number }>('/manage/products/bulk-delete', { ids: selected });
+      toast.success(t('admin.deletedCount', { count: r.deleted }));
+      setSelected([]);
+      setBulkDeleteOpen(false);
       await qc.invalidateQueries({ queryKey: ['manage-products'] });
     } catch (e) {
       toast.error(e);
@@ -332,6 +345,20 @@ export function ProductsPage() {
             { value: 'out', label: t('product.outOfStock') },
           ]}
         />
+        {selected.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-danger-soft px-3 py-2">
+            <span className="text-[13px] font-bold">{t('admin.selected', { count: selected.length })}</span>
+            {mobile && q.data && (
+              <button className="text-[13px] font-semibold text-primary underline" onClick={() => setSelected(allSel ? [] : q.data!.items.map((p) => p.id))}>
+                {allSel ? t('common.cancel') : t('common.all')}
+              </button>
+            )}
+            <div className="ml-auto flex gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setSelected([])}>{t('common.cancel')}</Button>
+              <Button size="sm" variant="danger" icon={Trash2} onClick={() => setBulkDeleteOpen(true)}>{t('common.delete')}</Button>
+            </div>
+          </div>
+        )}
         {q.isLoading && <OrdersListSkeleton />}
         {q.error && <ErrorState error={q.error} onRetry={() => q.refetch()} />}
         {q.data?.items.length === 0 && <Empty icon={Search} title={t('shop.noProducts')} />}
@@ -350,6 +377,9 @@ export function ProductsPage() {
                   </button>
                   <button onClick={() => toggleActive(p)} className="p-1.5 text-muted" aria-label="toggle">
                     {p.isActive ? <Eye className="h-5 w-5 text-success" /> : <EyeOff className="h-5 w-5" />}
+                  </button>
+                  <button onClick={() => setToDelete(p)} className="p-1.5 text-danger" aria-label={t('common.delete')}>
+                    <Trash2 className="h-5 w-5" />
                   </button>
                 </Card>
               ))}
@@ -417,7 +447,22 @@ export function ProductsPage() {
       </div>
       <BulkPriceModal open={bulkOpen} onClose={() => setBulkOpen(false)} ids={selected} categories={cats.data || []} />
       <ExcelImportModal open={importOpen} onClose={() => setImportOpen(false)} onDownload={downloadExcel} />
-      <ConfirmModal open={!!toDelete} onClose={() => setToDelete(null)} onConfirm={remove} danger title={`${t('common.delete')}: ${toDelete ? nameOf(toDelete) : ''}`} />
+      <ConfirmModal
+        open={!!toDelete}
+        onClose={() => setToDelete(null)}
+        onConfirm={remove}
+        danger
+        title={`${t('common.delete')}: ${toDelete ? nameOf(toDelete) : ''}`}
+        text={t('admin.deleteProductHint')}
+      />
+      <ConfirmModal
+        open={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={removeSelected}
+        danger
+        title={t('admin.deleteSelectedTitle', { count: selected.length })}
+        text={t('admin.deleteProductHint')}
+      />
     </AdminPage>
   );
 }

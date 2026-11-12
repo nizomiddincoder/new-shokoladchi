@@ -106,7 +106,8 @@ export type Cart = { items: CartLine[]; itemsTotal: number };
 
 export type OrderItem = {
   id: number;
-  productId: number;
+  /** Mahsulot o'chirilgan bo'lsa null */
+  productId: number | null;
   nameUz: string;
   nameRu: string;
   unit: Unit;

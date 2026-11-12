@@ -284,7 +284,7 @@ export async function setFinalWeights(orderId: number, actor: OrderActor, items:
       const qty = round3(finalQty);
       const prev = toNum(item.finalQty ?? item.qty);
       const delta = round3(qty - prev);
-      if (delta !== 0) {
+      if (delta !== 0 && item.productId) {
         const p = await tx.product.update({
           where: { id: item.productId },
           data: { stock: { decrement: delta } },
@@ -397,6 +397,7 @@ export async function markDelivered(orderId: number, actor: OrderActor) {
 async function bumpSoldCount(orderId: number) {
   const items = await prisma.orderItem.findMany({ where: { orderId } });
   for (const it of items) {
+    if (!it.productId) continue;
     await prisma.product
       .update({ where: { id: it.productId }, data: { soldCount: { increment: toNum(it.finalQty ?? it.qty) } } })
       .catch(() => undefined);
@@ -435,6 +436,7 @@ export async function cancelOrder(orderId: number, actor: OrderActor, reason: st
     });
     if (res.count !== 1) throw conflict('WRONG_STATUS', 'Bu amal hozirgi holatda mumkin emas');
     for (const it of before.items) {
+      if (!it.productId) continue; // mahsulot o'chirilgan
       const qty = toNum(it.finalQty ?? it.qty);
       const p = await tx.product.update({
         where: { id: it.productId },
