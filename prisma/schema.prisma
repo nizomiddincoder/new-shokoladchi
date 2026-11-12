@@ -1,0 +1,397 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  WAREHOUSE
+  COURIER
+  ADMIN
+}
+
+enum Language {
+  uz
+  ru
+}
+
+enum RegStep {
+  LANG
+  NAME
+  PHONE
+  DONE
+}
+
+enum Unit {
+  PIECE
+  KG
+  GRAM
+  LITER
+  BOX
+  PACK
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ORDER
+  ADJUST
+  RETURN
+}
+
+enum OrderStatus {
+  NEW
+  ACCEPTED
+  PREPARING
+  READY
+  ON_THE_WAY
+  DELIVERED
+  PICKED_UP
+  CANCELLED
+}
+
+enum DeliveryType {
+  PICKUP
+  DELIVERY
+}
+
+enum AiStatus {
+  NONE
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum BannerLinkType {
+  NONE
+  CATEGORY
+  PRODUCT
+}
+
+enum BroadcastSegment {
+  ALL
+  ACTIVE_30
+  INACTIVE_30
+  NO_ORDERS
+}
+
+enum BroadcastStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+model User {
+  id         Int       @id @default(autoincrement())
+  telegramId BigInt    @unique
+  username   String?
+  firstName  String    @default("")
+  lastName   String    @default("")
+  phone      String?
+  language   Language  @default(uz)
+  role       Role      @default(CUSTOMER)
+  isBlocked  Boolean   @default(false)
+  botBlocked Boolean   @default(false)
+  regStep    RegStep   @default(LANG)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // bot holatlari (restartdan keyin ham saqlanadi)
+  pendingInviteId       Int?
+  awaitingPhotoOrderId  Int?
+  awaitingCancelOrderId Int?
+
+  orders          Order[]         @relation("CustomerOrders")
+  sellerOrders    Order[]         @relation("SellerOrders")
+  courierOrders   Order[]         @relation("CourierOrders")
+  cartItems       CartItem[]
+  favorites       Favorite[]
+  stockMovements  StockMovement[]
+  auditLogs       AuditLog[]
+  usedInvites     Invite[]        @relation("InviteUsedBy")
+  createdInvites  Invite[]        @relation("InviteCreatedBy")
+  createdProducts Product[]       @relation("ProductCreatedBy")
+  updatedProducts Product[]       @relation("ProductUpdatedBy")
+
+  @@index([role])
+  @@index([createdAt])
+}
+
+model AdminAccount {
+  id             Int       @id @default(autoincrement())
+  login          String    @unique
+  passwordHash   String
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Invite {
+  id          Int       @id @default(autoincrement())
+  token       String    @unique
+  role        Role
+  staffName   String
+  expiresAt   DateTime
+  usedById    Int?
+  usedBy      User?     @relation("InviteUsedBy", fields: [usedById], references: [id], onDelete: SetNull)
+  usedAt      DateTime?
+  revoked     Boolean   @default(false)
+  createdById Int?
+  createdBy   User?     @relation("InviteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  nameUz    String
+  nameRu    String
+  iconName  String    @default("ShoppingBasket")
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id                Int             @id @default(autoincrement())
+  nameUz            String
+  nameRu            String
+  descriptionUz     String          @default("")
+  descriptionRu     String          @default("")
+  categoryId        Int
+  category          Category        @relation(fields: [categoryId], references: [id])
+  price             Int
+  oldPrice          Int?
+  unit              Unit            @default(PIECE)
+  step              Decimal         @default(1) @db.Decimal(10, 3)
+  minQty            Decimal         @default(1) @db.Decimal(10, 3)
+  stock             Decimal         @default(0) @db.Decimal(12, 3)
+  lowStockThreshold Decimal         @default(5) @db.Decimal(12, 3)
+  sortOrder         Int             @default(0)
+  isActive          Boolean         @default(true)
+  soldCount         Decimal         @default(0) @db.Decimal(14, 3)
+  createdById       Int?
+  createdBy         User?           @relation("ProductCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById       Int?
+  updatedBy         User?           @relation("ProductUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  images            ProductImage[]
+  stockMovements    StockMovement[]
+  orderItems        OrderItem[]
+  cartItems         CartItem[]
+  favorites         Favorite[]
+
+  @@index([categoryId])
+  @@index([isActive])
+}
+
+model ProductImage {
+  id            Int       @id @default(autoincrement())
+  productId     Int?
+  product       Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  originalUrl   String
+  originalThumb String
+  aiUrl         String?
+  aiThumb       String?
+  aiStatus      AiStatus  @default(NONE)
+  aiError       String?
+  useAi         Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  aiCalls       AiCall[]
+
+  @@index([productId])
+}
+
+model AiCall {
+  id         Int           @id @default(autoincrement())
+  imageId    Int?
+  image      ProductImage? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  model      String
+  success    Boolean
+  error      String?
+  durationMs Int
+  createdAt  DateTime      @default(now())
+
+  @@index([createdAt])
+}
+
+model StockMovement {
+  id        Int               @id @default(autoincrement())
+  productId Int
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type      StockMovementType
+  /// Ishorali miqdor: + qoldiq oshdi, - qoldiq kamaydi
+  qty       Decimal           @db.Decimal(12, 3)
+  stockAfter Decimal?         @db.Decimal(12, 3)
+  note      String            @default("")
+  orderId   Int?
+  userId    Int?
+  user      User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  actorLabel String?
+  createdAt DateTime          @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model Order {
+  id                Int          @id @default(autoincrement())
+  number            Int          @unique @default(autoincrement())
+  customerId        Int
+  customer          User         @relation("CustomerOrders", fields: [customerId], references: [id])
+  status            OrderStatus  @default(NEW)
+  deliveryType      DeliveryType
+  address           String       @default("")
+  lat               Float?
+  lng               Float?
+  comment           String       @default("")
+  phone             String       @default("")
+  itemsTotal        Int
+  deliveryFee       Int          @default(0)
+  finalTotal        Int
+  initialTotal      Int
+  sellerId          Int?
+  seller            User?        @relation("SellerOrders", fields: [sellerId], references: [id])
+  courierId         Int?
+  courier           User?        @relation("CourierOrders", fields: [courierId], references: [id])
+  readyPhotoUrl     String?
+  cancelReason      String?
+  cancelledBy       String?
+  groupChatId       String?
+  groupMessageId    Int?
+  /// Kuryerlarga yuborilgan xabarlar: [{chatId, messageId}]
+  courierMsgs       Json?
+  timeoutNotifiedAt DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  acceptedAt        DateTime?
+  preparingAt       DateTime?
+  readyAt           DateTime?
+  pickedUpAt        DateTime?
+  deliveredAt       DateTime?
+  cancelledAt       DateTime?
+  items             OrderItem[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([sellerId])
+  @@index([courierId])
+}
+
+model OrderItem {
+  id            Int      @id @default(autoincrement())
+  orderId       Int
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     Int
+  product       Product  @relation(fields: [productId], references: [id])
+  nameSnapshot  String
+  nameRuSnapshot String  @default("")
+  unit          Unit
+  qty           Decimal  @db.Decimal(10, 3)
+  priceSnapshot Int
+  finalQty      Decimal? @db.Decimal(10, 3)
+  lineTotal     Int
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model CartItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty       Decimal  @db.Decimal(10, 3)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
+}
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model Settings {
+  id                   Int      @id @default(1)
+  shopName             String   @default("Shokoladchi")
+  shopPhone            String   @default("")
+  shopAddress          String   @default("")
+  shopLat              Float?
+  shopLng              Float?
+  workHoursStart       String   @default("09:00")
+  workHoursEnd         String   @default("22:00")
+  deliveryFee          Int      @default(15000)
+  freeDeliveryFrom     Int      @default(300000)
+  minOrderAmount       Int      @default(50000)
+  acceptTimeoutMinutes Int      @default(10)
+  updatedAt            DateTime @updatedAt
+}
+
+model Banner {
+  id        Int            @id @default(autoincrement())
+  imageUrl  String
+  titleUz   String         @default("")
+  titleRu   String         @default("")
+  linkType  BannerLinkType @default(NONE)
+  linkId    Int?
+  sortOrder Int            @default(0)
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+}
+
+model Broadcast {
+  id         Int              @id @default(autoincrement())
+  text       String
+  imageUrl   String?
+  segment    BroadcastSegment @default(ALL)
+  status     BroadcastStatus  @default(QUEUED)
+  total      Int              @default(0)
+  sent       Int              @default(0)
+  blocked    Int              @default(0)
+  failed     Int              @default(0)
+  lastUserId Int              @default(0)
+  createdBy  String           @default("")
+  createdAt  DateTime         @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  actorLabel String   @default("")
+  action     String
+  entity     String
+  entityId   String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity])
+}

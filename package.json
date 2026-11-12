@@ -1,12 +1,31 @@
 {
   "name": "shokoladchi",
-  "version": "0.1.0",
   "private": true,
+  "version": "1.0.0",
+  "description": "Oziq-ovqat do'koni: Telegram bot + Mini App + Web admin",
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "engines": {
-    "node": "22.x"
+    "node": ">=20"
   },
   "scripts": {
-    "build": "npm ci --prefix server && npm ci --prefix web && npm run build --prefix web",
-    "start": "cd server && npm start"
+    "build": "npm run prisma:generate && npm run build -w web && npm run build -w server",
+    "start": "prisma migrate deploy && node server/dist/index.js",
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "prisma:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2"
   }
 }

@@ -1,10 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect x="1" y="1" width="30" height="30" rx="8" fill="#4B2E1F"/>
-  <!-- Shokolad plitasiga o'xshash belgi -->
-  <g fill="#F3EBE4">
-    <rect x="8" y="7" width="7" height="7" rx="2"/>
-    <rect x="17" y="7" width="7" height="7" rx="2"/>
-    <rect x="8" y="16" width="7" height="7" rx="2"/>
-    <rect x="17" y="16" width="7" height="7" rx="2"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#6F4E37"/><path d="M20 22h24v22a4 4 0 0 1-4 4H24a4 4 0 0 1-4-4z" fill="none" stroke="#F3ECE6" stroke-width="4" stroke-linejoin="round"/><path d="M26 22v-2a6 6 0 0 1 12 0v2" fill="none" stroke="#D9A066" stroke-width="4" stroke-linecap="round"/></svg>

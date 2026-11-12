@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #6f4e37;
+  --primary-dark: #4a3224;
+  --primary-light: #a47551;
+  --primary-soft: #f3ece6;
+  --accent: #d9a066;
+  --bg: #ffffff;
+  --surface: #faf7f5;
+  --text: #2b1d14;
+  --text-muted: #8c7b70;
+  --border: #eadfd7;
+  --danger: #c0392b;
+  --success: #2e7d32;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  font-family: 'Plus Jakarta Sans', Inter, system-ui, sans-serif;
+}
+
+body {
+  overscroll-behavior-y: none;
+}
+
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-[15px] text-ink outline-none transition placeholder:text-muted/70 focus:border-primary-light focus:ring-2 focus:ring-primary-soft disabled:bg-surface disabled:text-muted;
+  }
+  .label {
+    @apply mb-1.5 block text-[13px] font-semibold text-primary-dark;
+  }
+  .card {
+    @apply rounded-card bg-white shadow-card;
+  }
+  .chip {
+    @apply inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-white px-3.5 py-1.5 text-[13px] font-semibold text-ink transition;
+  }
+  .chip-active {
+    @apply border-primary bg-primary text-white;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .tbl {
+    @apply w-full border-collapse text-left text-sm;
+  }
+  .tbl th {
+    @apply whitespace-nowrap border-b border-line bg-surface px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-muted;
+  }
+  .tbl td {
+    @apply border-b border-line/70 px-3 py-2.5 align-middle;
+  }
+  .tbl tr:hover td {
+    @apply bg-surface/60;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f3ece6 0%, #faf7f5 50%, #f3ece6 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.18s ease-out;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sheet-in {
+  animation: sheetIn 0.22s ease-out;
+}
+@keyframes sheetIn {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.pb-safe {
+  padding-bottom: calc(var(--safe-bottom) + 8px);
+}
+
+/* Leaflet */
+.leaflet-container {
+  font-family: inherit;
+  border-radius: 14px;
+  z-index: 0;
+}
+.map-pin {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 4px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
