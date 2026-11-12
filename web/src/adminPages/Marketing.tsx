@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { ImagePlus, Megaphone, Pencil, Plus, Send, Trash2, X } from 'lucide-react';
+import { ImagePlus, Loader2, Megaphone, Pencil, Plus, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { del, get, patch, post, upload } from '../shared/api';
 import type { Banner, Category, Paged, Product } from '../shared/types';
-import { Badge, Button, Card, ConfirmModal, Empty, Field, Modal, Switch, useToast } from '../shared/ui';
+import { Badge, Button, Card, ConfirmModal, Empty, Field, Modal, Segmented, Switch, useToast } from '../shared/ui';
 import { OrdersListSkeleton } from '../shared/staffParts';
 import { dateTime, nameOf } from '../shared/format';
 import { AdminPage } from './common';
@@ -146,6 +146,90 @@ export function BroadcastPage() {
 }
 
 // ================= BANNERLAR =================
+
+/** AI banner: rasmlar + tavsif -> Gemini tayyor banner yasaydi */
+function AiBannerBuilder({ value, onChange }: { value: string | null; onChange: (url: string) => void }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const ref = useRef<HTMLInputElement>(null);
+  const [sources, setSources] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [description, setDescription] = useState('');
+  const [headline, setHeadline] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const onFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      for (const f of Array.from(files).slice(0, 4 - sources.length)) {
+        const r = await upload<{ url: string }>('/admin/uploads?folder=banners', f);
+        setSources((s) => [...s, r.url].slice(0, 4));
+      }
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setUploading(false);
+      if (ref.current) ref.current.value = '';
+    }
+  };
+
+  const generate = async () => {
+    setBusy(true);
+    try {
+      const r = await post<{ url: string }>('/admin/banners/ai', { description: description.trim(), headline: headline.trim() || undefined, imageUrls: sources });
+      onChange(r.url);
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <Field label={t('admin.bnSources')}>
+        <div className="flex flex-wrap gap-2">
+          {sources.map((u) => (
+            <div key={u} className="relative h-20 w-20 overflow-hidden rounded-xl border border-line">
+              <img src={u} alt="" className="h-full w-full object-cover" />
+              <button type="button" onClick={() => setSources((s) => s.filter((x) => x !== u))} className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow" aria-label="remove">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          {sources.length < 4 && (
+            <button
+              type="button"
+              onClick={() => ref.current?.click()}
+              className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-primary-light text-[11px] font-semibold text-primary"
+            >
+              {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+              {t('admin.bnAddSource')}
+            </button>
+          )}
+          <input ref={ref} type="file" accept="image/*" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
+        </div>
+      </Field>
+      <Field label={t('admin.bnDescription')}>
+        <textarea className="input min-h-[84px]" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('admin.bnDescriptionPh')} maxLength={1000} />
+      </Field>
+      <Field label={t('admin.bnHeadline')} hint={t('admin.bnHeadlineHint')}>
+        <input className="input" value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder={t('admin.bnHeadlinePh')} maxLength={80} />
+      </Field>
+      <Button block variant={value ? 'secondary' : 'primary'} icon={value ? RefreshCw : Sparkles} loading={busy} disabled={description.trim().length < 3 || uploading} onClick={generate}>
+        {value ? t('admin.bnRegenerate') : t('admin.bnGenerate')}
+      </Button>
+      {busy && <p className="text-center text-[12px] text-muted">{t('admin.bnGenerating')}</p>}
+      {value && !busy && (
+        <div>
+          <div className="mb-1.5 text-[13px] font-semibold text-primary-dark">{t('admin.bnResult')}</div>
+          <img src={value} alt="" className="aspect-[2.2/1] w-full rounded-2xl border border-line object-cover" />
+        </div>
+      )}
+    </div>
+  );
+}
 type BannerForm = Omit<Banner, 'id'> & { id?: number };
 const emptyBanner: BannerForm = { imageUrl: '', titleUz: '', titleRu: '', linkType: 'NONE', linkId: null, sortOrder: 0, isActive: true };
 
@@ -159,12 +243,15 @@ export function BannersPage() {
   const [form, setForm] = useState<BannerForm | null>(null);
   const [busy, setBusy] = useState(false);
   const [toDelete, setToDelete] = useState<Banner | null>(null);
+  const [bannerMode, setBannerMode] = useState<'ai' | 'upload'>('ai');
 
   const save = async () => {
     if (!form) return;
     setBusy(true);
     try {
-      const { id, ...body } = form;
+      // titleRu yuborilmaydi: server o'zbekchadan avtomatik tarjima qiladi
+      const { id, titleRu, ...body } = form;
+      void titleRu;
       const payload = { ...body, linkId: body.linkType === 'NONE' ? null : body.linkId };
       if (id) await patch(`/admin/banners/${id}`, payload);
       else await post('/admin/banners', payload);
@@ -189,7 +276,21 @@ export function BannersPage() {
   };
 
   return (
-    <AdminPage title={t('admin.banners')} actions={<Button size="sm" icon={Plus} onClick={() => setForm({ ...emptyBanner, sortOrder: q.data?.length || 0 })}>{t('common.add')}</Button>}>
+    <AdminPage
+      title={t('admin.banners')}
+      actions={
+        <Button
+          size="sm"
+          icon={Plus}
+          onClick={() => {
+            setBannerMode('ai');
+            setForm({ ...emptyBanner, sortOrder: q.data?.length || 0 });
+          }}
+        >
+          {t('common.add')}
+        </Button>
+      }
+    >
       {q.isLoading && <OrdersListSkeleton />}
       {q.data?.length === 0 && <Empty icon={ImagePlus} title={t('common.empty')} />}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -203,7 +304,7 @@ export function BannersPage() {
                   {t(`admin.link.${b.linkType}`)} · #{b.sortOrder} {!b.isActive && <Badge tone="muted">{t('common.inactive')}</Badge>}
                 </div>
               </div>
-              <button className="rounded-lg p-1.5 text-primary hover:bg-surface" onClick={() => setForm({ ...b })} aria-label={t('common.edit')}><Pencil className="h-4 w-4" /></button>
+              <button className="rounded-lg p-1.5 text-primary hover:bg-surface" onClick={() => { setBannerMode('upload'); setForm({ ...b }); }} aria-label={t('common.edit')}><Pencil className="h-4 w-4" /></button>
               <button className="rounded-lg p-1.5 text-danger hover:bg-[#FBEAE8]" onClick={() => setToDelete(b)} aria-label={t('common.delete')}><Trash2 className="h-4 w-4" /></button>
             </div>
           </Card>
@@ -213,6 +314,7 @@ export function BannersPage() {
         open={!!form}
         onClose={() => setForm(null)}
         title={form?.id ? t('admin.banner') : t('admin.newBanner')}
+        wide
         footer={
           <div className="pb-2">
             <Button block loading={busy} disabled={!form?.imageUrl} onClick={save}>{t('common.save')}</Button>
@@ -221,12 +323,21 @@ export function BannersPage() {
       >
         {form && (
           <div className="space-y-3">
-            <ImagePicker value={form.imageUrl || null} onChange={(url) => setForm({ ...form, imageUrl: url || '' })} folder="banners" />
+            <Segmented
+              value={bannerMode}
+              onChange={setBannerMode}
+              items={[
+                { value: 'ai', label: t('admin.bnModeAi'), icon: Sparkles },
+                { value: 'upload', label: t('admin.bnModeUpload'), icon: ImagePlus },
+              ]}
+            />
+            {bannerMode === 'ai' ? (
+              <AiBannerBuilder value={form.imageUrl || null} onChange={(url) => setForm({ ...form, imageUrl: url })} />
+            ) : (
+              <ImagePicker value={form.imageUrl || null} onChange={(url) => setForm({ ...form, imageUrl: url || '' })} folder="banners" />
+            )}
             <Field label={t('admin.titleUz')}>
               <input className="input" value={form.titleUz} onChange={(e) => setForm({ ...form, titleUz: e.target.value })} maxLength={120} />
-            </Field>
-            <Field label={t('admin.titleRu')}>
-              <input className="input" value={form.titleRu} onChange={(e) => setForm({ ...form, titleRu: e.target.value })} maxLength={120} />
             </Field>
             <Field label={t('admin.linkType')}>
               <select className="input" value={form.linkType} onChange={(e) => setForm({ ...form, linkType: e.target.value as Banner['linkType'], linkId: null })}>

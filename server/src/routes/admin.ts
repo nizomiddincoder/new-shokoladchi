@@ -13,7 +13,8 @@ import { STAFF_ORDER_INCLUDE, staffOrderDto } from './staff';
 import { saveImage, type Folder } from '../services/storage';
 import { dashboardStats, resolveRange } from '../services/stats';
 import { buildExport, type ExportType } from '../services/export';
-import { aiMonthlyStats } from '../services/ai';
+import { aiEnabled, aiMonthlyStats, generateBanner } from '../services/ai';
+import { enqueueTranslation } from '../services/translate';
 import { runBroadcasts, segmentWhere } from '../services/broadcast';
 import { bot, safeCall } from '../bot/instance';
 import { setMenuButtonFor } from '../bot/handlers';
@@ -195,7 +196,8 @@ adminRouter.post(
 // ================= KATEGORIYALAR =================
 const categoryBody = z.object({
   nameUz: z.string().trim().min(1).max(100),
-  nameRu: z.string().trim().min(1).max(100),
+  // Ixtiyoriy: yuborilmasa avtomatik tarjima qilinadi
+  nameRu: z.string().trim().max(100).optional(),
   iconName: z.string().trim().min(1).max(50).default('ShoppingBasket'),
   sortOrder: z.number().int().default(0),
   isActive: z.boolean().default(true),
@@ -216,7 +218,9 @@ adminRouter.post(
   '/categories',
   ah(async (req, res) => {
     const data = categoryBody.parse(req.body);
-    const c = await prisma.category.create({ data });
+    const auto = !data.nameRu;
+    const c = await prisma.category.create({ data: { ...data, nameRu: data.nameRu || data.nameUz } });
+    if (auto) enqueueTranslation('category', c.id);
     await audit(req.actor!, 'category.create', 'Category', c.id, null, data);
     res.status(201).json(c);
   }),
@@ -229,7 +233,11 @@ adminRouter.patch(
     const before = await prisma.category.findUnique({ where: { id } });
     if (!before) throw notFound();
     const data = categoryBody.partial().parse(req.body);
+    const auto = !data.nameRu && !!data.nameUz && data.nameUz !== before.nameUz;
+    if (!data.nameRu) delete data.nameRu;
+    if (auto && !aiEnabled()) data.nameRu = data.nameUz;
     const c = await prisma.category.update({ where: { id }, data });
+    if (auto) enqueueTranslation('category', id);
     await audit(req.actor!, 'category.update', 'Category', id, before, data);
     res.json(c);
   }),
@@ -489,20 +497,47 @@ adminRouter.post(
 const bannerBody = z.object({
   imageUrl: z.string().startsWith('/uploads/'),
   titleUz: z.string().trim().max(120).default(''),
-  titleRu: z.string().trim().max(120).default(''),
+  // Ixtiyoriy: yuborilmasa avtomatik tarjima qilinadi
+  titleRu: z.string().trim().max(120).optional(),
   linkType: z.enum(['NONE', 'CATEGORY', 'PRODUCT']).default('NONE'),
   linkId: z.number().int().nullable().optional(),
   sortOrder: z.number().int().default(0),
   isActive: z.boolean().default(true),
 });
 
-adminRouter.get('/banners', ah(async (_req, res) => res.json(await prisma.banner.findMany({ orderBy: [{ sortOrder: 'asc' }, { id: 'desc' }] }))));
+/** AI bilan banner rasmi: yuklangan rasmlar + tavsif -> tayyor banner (saqlanmaydi, faqat rasm qaytadi) */
+adminRouter.post(
+  '/banners/ai',
+  ah(async (req, res) => {
+    const body = z
+      .object({
+        description: z.string().trim().min(3, 'Banner tavsifini yozing').max(1000),
+        headline: z.string().trim().max(80).optional(),
+        imageUrls: z.array(z.string().startsWith('/uploads/')).max(4).default([]),
+      })
+      .parse(req.body);
+    if (!aiEnabled()) throw badRequest('AI_DISABLED', 'AI o\'chirilgan: GEMINI_API_KEY o\'rnatilmagan');
+    try {
+      const r = await generateBanner(body);
+      await audit(req.actor!, 'banner.ai_generate', 'Banner', null, null, { description: body.description, headline: body.headline });
+      res.json(r);
+    } catch (e) {
+      throw badRequest('AI_FAILED', (e as Error).message);
+    }
+  }),
+);
+
+adminRouter.get('/banners',ah(async (_req, res) => res.json(await prisma.banner.findMany({ orderBy: [{ sortOrder: 'asc' }, { id: 'desc' }] }))));
 
 adminRouter.post(
   '/banners',
   ah(async (req, res) => {
     const data = bannerBody.parse(req.body);
-    const b = await prisma.banner.create({ data: { ...data, linkId: data.linkType === 'NONE' ? null : data.linkId ?? null } });
+    const auto = !data.titleRu && !!data.titleUz;
+    const b = await prisma.banner.create({
+      data: { ...data, titleRu: data.titleRu || data.titleUz, linkId: data.linkType === 'NONE' ? null : data.linkId ?? null },
+    });
+    if (auto) enqueueTranslation('banner', b.id);
     await audit(req.actor!, 'banner.create', 'Banner', b.id, null, data);
     res.status(201).json(b);
   }),
@@ -515,7 +550,11 @@ adminRouter.patch(
     const data = bannerBody.partial().parse(req.body);
     const before = await prisma.banner.findUnique({ where: { id } });
     if (!before) throw notFound();
+    const auto = !data.titleRu && data.titleUz !== undefined && data.titleUz !== before.titleUz;
+    if (!data.titleRu) delete data.titleRu;
+    if (auto && (!aiEnabled() || !data.titleUz)) data.titleRu = data.titleUz;
     const b = await prisma.banner.update({ where: { id }, data });
+    if (auto && data.titleUz) enqueueTranslation('banner', id);
     await audit(req.actor!, 'banner.update', 'Banner', id, before, data);
     res.json(b);
   }),

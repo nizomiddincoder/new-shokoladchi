@@ -15,6 +15,9 @@ type Env = {
   COURIERS_GROUP_CHAT_ID: string | null;
   GEMINI_API_KEY: string | null;
   GEMINI_IMAGE_MODEL: string;
+  GEMINI_IMAGE_SIZE: string | null;
+  GEMINI_TEXT_MODEL: string;
+  GEMINI_BASE_URL: string | null;
   UPLOAD_DIR: string;
   TZ: string;
   SEED_DEMO_DATA: boolean;
@@ -74,6 +77,12 @@ function loadEnv(): Env {
     COURIERS_GROUP_CHAT_ID: process.env.COURIERS_GROUP_CHAT_ID?.trim() || null,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY?.trim() || null,
     GEMINI_IMAGE_MODEL: process.env.GEMINI_IMAGE_MODEL?.trim() || 'gemini-2.5-flash-image',
+    // Faqat 2K/4K ni qo'llab-quvvatlaydigan modellar uchun (masalan gemini-3-pro-image-preview)
+    GEMINI_IMAGE_SIZE: process.env.GEMINI_IMAGE_SIZE?.trim() || null,
+    // Avtomatik tarjima (o'zbekcha -> ruscha) uchun
+    GEMINI_TEXT_MODEL: process.env.GEMINI_TEXT_MODEL?.trim() || 'gemini-2.5-flash',
+    // Ixtiyoriy: Gemini API uchun proxy manzili
+    GEMINI_BASE_URL: process.env.GEMINI_BASE_URL?.trim() || null,
     UPLOAD_DIR: path.resolve(process.env.UPLOAD_DIR || '/data/uploads'),
     TZ: process.env.TZ || 'Asia/Tashkent',
     SEED_DEMO_DATA: process.env.SEED_DEMO_DATA === 'true',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +28,8 @@ export function CheckoutPage() {
   const [address, setAddress] = useState('');
   const [comment, setComment] = useState('');
   const [sending, setSending] = useState(false);
+  const [showNeedLoc, setShowNeedLoc] = useState(false);
+  const locationRef = useRef<HTMLDivElement>(null);
 
   const s = settings.data;
   const itemsTotal = cart.total;
@@ -35,8 +37,19 @@ export function CheckoutPage() {
   const total = itemsTotal + deliveryFee;
   const closed = s ? !s.isOpen : false;
   const needLoc = type === 'DELIVERY' && !loc && !address.trim();
-  const disabled = !cart.count || closed || needLoc || sending || (s ? itemsTotal < s.minOrderAmount : true);
   const approx = cart.items.some((i) => isWeighted(i.product.unit));
+
+  /**
+   * Buyurtma berib bo'lmasligi sababi (bo'lsa). Tugma o'chirib qo'yilmaydi —
+   * aks holda Telegram'da bosilganda hech narsa bo'lmaydi va mijoz sababini bilmaydi.
+   */
+  const problem = (): string | null => {
+    if (!s) return t('common.loading');
+    if (closed) return t('checkout.closedNow', { start: s.workHoursStart, end: s.workHoursEnd });
+    if (itemsTotal < s.minOrderAmount) return t('cart.minOrder', { sum: money(s.minOrderAmount), left: money(s.minOrderAmount - itemsTotal) });
+    if (needLoc) return t('checkout.needLocation');
+    return null;
+  };
 
   const getLocation = async () => {
     setLocBusy(true);
@@ -54,8 +67,14 @@ export function CheckoutPage() {
   };
 
   const submit = async () => {
-    if (disabled) {
-      if (needLoc) toast.error(new Error(t('checkout.needLocation')));
+    if (sending || !cart.count) return;
+    const p = problem();
+    if (p) {
+      toast.error(new Error(p));
+      if (needLoc) {
+        setShowNeedLoc(true);
+        locationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
     setSending(true);
@@ -79,7 +98,7 @@ export function CheckoutPage() {
     }
   };
 
-  useMainButton({ text: `${t('checkout.placeOrder')} · ${money(total)}`, onClick: submit, disabled, loading: sending, visible: cart.count > 0 });
+  useMainButton({ text: `${t('checkout.placeOrder')} · ${money(total)}`, onClick: submit, disabled: sending, loading: sending, visible: cart.count > 0 });
 
   if (settings.isLoading || cart.isLoading) return <PageLoader />;
   if (!cart.count && !sending) return <Navigate to="/cart" replace />;
@@ -105,7 +124,8 @@ export function CheckoutPage() {
         />
 
         {type === 'DELIVERY' ? (
-          <Card className="space-y-3 p-4">
+          <div ref={locationRef}>
+          <Card className={showNeedLoc && needLoc ? 'space-y-3 p-4 ring-2 ring-danger' : 'space-y-3 p-4'}>
             <Button block variant={loc ? 'secondary' : 'primary'} icon={LocateFixed} loading={locBusy} onClick={getLocation}>
               {loc ? t('checkout.locationReceived') : t('checkout.sendLocation')}
             </Button>
@@ -122,11 +142,15 @@ export function CheckoutPage() {
                 </div>
               </div>
             )}
-            {loc && <MapView lat={loc.lat} lng={loc.lng} height={170} onPick={(lat, lng) => setLoc({ lat, lng })} />}
+            {/* Joylashuvni olib bo'lmasa ham (masalan Telegram Desktop) nuqtani xaritadan bosib tanlash mumkin */}
+            <div className="text-[12px] text-muted">{t('checkout.pickOnMap')}</div>
+            <MapView lat={loc?.lat} lng={loc?.lng} height={190} onPick={(lat, lng) => setLoc({ lat, lng })} />
             <Field label={t('checkout.addressNote')}>
               <textarea className="input min-h-[72px]" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={500} />
             </Field>
+            {showNeedLoc && needLoc && <div className="text-[13px] font-semibold text-danger">{t('checkout.needLocation')}</div>}
           </Card>
+          </div>
         ) : (
           <Card className="space-y-3 p-4">
             <div className="flex gap-2.5">
@@ -188,11 +212,10 @@ export function CheckoutPage() {
           {t('checkout.paymentNote')}
         </div>
 
-        {!isTelegram && (
-          <Button block size="lg" disabled={disabled} loading={sending} onClick={submit}>
-            {t('checkout.placeOrder')} · {money(total)}
-          </Button>
-        )}
+        {/* Sahifa ichidagi tugma doim bor: Telegram pastki tugmasi ko'rinmaydigan klientlarda ham buyurtma berish mumkin */}
+        <Button block size="lg" loading={sending} onClick={submit}>
+          {t('checkout.placeOrder')} · {money(total)}
+        </Button>
       </div>
     </div>
   );

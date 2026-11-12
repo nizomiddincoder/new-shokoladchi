@@ -319,7 +319,8 @@ export function CategoriesPage() {
     if (!form) return;
     setBusy(true);
     try {
-      const body = { nameUz: form.nameUz.trim(), nameRu: form.nameRu.trim(), iconName: form.iconName, isActive: form.isActive };
+      // Ruscha nom server tomonida avtomatik tarjima qilinadi
+      const body = { nameUz: form.nameUz.trim(), iconName: form.iconName, isActive: form.isActive };
       if (form.id) await patch(`/admin/categories/${form.id}`, body);
       else await post('/admin/categories', { ...body, sortOrder: (q.data?.length || 0) + 1 });
       toast.success(t('common.saved'));
@@ -393,7 +394,7 @@ export function CategoriesPage() {
         title={form?.id ? t('common.edit') : t('admin.newCategory')}
         footer={
           <div className="pb-2">
-            <Button block loading={busy} disabled={!form?.nameUz.trim() || !form?.nameRu.trim()} onClick={save}>{t('common.save')}</Button>
+            <Button block loading={busy} disabled={!form?.nameUz.trim()} onClick={save}>{t('common.save')}</Button>
           </div>
         }
       >
@@ -402,9 +403,11 @@ export function CategoriesPage() {
             <Field label={t('pf.nameUz')}>
               <input className="input" value={form.nameUz} onChange={(e) => setForm({ ...form, nameUz: e.target.value })} />
             </Field>
-            <Field label={t('pf.nameRu')}>
-              <input className="input" value={form.nameRu} onChange={(e) => setForm({ ...form, nameRu: e.target.value })} />
-            </Field>
+            {form.id && form.nameRu && (
+              <div className="text-[12px] text-muted">
+                {t('pf.nameRu')}: <span className="font-semibold text-ink">{form.nameRu}</span>
+              </div>
+            )}
             <Field label={t('admin.icon')}>
               <div className="grid grid-cols-8 gap-1.5">
                 {Object.keys(CATEGORY_ICONS).map((name) => (

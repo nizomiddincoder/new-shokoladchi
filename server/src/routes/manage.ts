@@ -9,7 +9,8 @@ import { imageUpload } from '../lib/upload';
 import { PRODUCT_INCLUDE, imageDto, productDto } from '../lib/dto';
 import { round3, toNum } from '../lib/format';
 import { saveImage, removeUpload } from '../services/storage';
-import { enqueueAi } from '../services/ai';
+import { aiEnabled, enqueueAi } from '../services/ai';
+import { enqueueTranslation } from '../services/translate';
 
 /** Mahsulot, rasm va ombor boshqaruvi: SELLER, WAREHOUSE, ADMIN */
 export const manageRouter = Router();
@@ -88,9 +89,10 @@ manageRouter.get(
 const productBody = z
   .object({
     nameUz: z.string().trim().min(1).max(200),
-    nameRu: z.string().trim().min(1).max(200),
+    // Ruscha ixtiyoriy: yuborilmasa avtomatik tarjima qilinadi
+    nameRu: z.string().trim().max(200).optional(),
     descriptionUz: z.string().trim().max(3000).default(''),
-    descriptionRu: z.string().trim().max(3000).default(''),
+    descriptionRu: z.string().trim().max(3000).optional(),
     categoryId: z.number().int().positive(),
     price: z.number().int().min(0).max(1_000_000_000),
     oldPrice: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
@@ -104,6 +106,27 @@ const productBody = z
     initialStock: z.number().min(0).max(10_000_000).optional(),
   })
   .refine((b) => !b.oldPrice || b.oldPrice > b.price, { message: 'Eski narx joriy narxdan katta bo\'lishi kerak', path: ['oldPrice'] });
+
+/**
+ * Ruscha maydonlarni aniqlaydi: qo'lda kiritilgan bo'lsa o'shani oladi, aks holda
+ * vaqtincha eski (yoki o'zbekcha) matn qo'yiladi va fonda tarjima navbatga qo'yiladi.
+ */
+function resolveRu(
+  data: { nameUz: string; descriptionUz: string; nameRu?: string; descriptionRu?: string },
+  before?: { nameUz: string; descriptionUz: string; nameRu: string; descriptionRu: string },
+) {
+  const manual = !!data.nameRu;
+  if (manual) return { nameRu: data.nameRu!, descriptionRu: data.descriptionRu ?? before?.descriptionRu ?? data.descriptionUz, translate: false };
+  const changed = !before || before.nameUz !== data.nameUz || before.descriptionUz !== data.descriptionUz;
+  if (before && !changed) return { nameRu: before.nameRu, descriptionRu: before.descriptionRu, translate: false };
+  // Tarjima ishlasa — u tugaguncha eski ruscha qoladi; AI o'chiq bo'lsa — o'zbekcha matn ko'rsatiladi
+  const keepOld = aiEnabled() && !!before;
+  return {
+    nameRu: keepOld ? before!.nameRu : data.nameUz,
+    descriptionRu: keepOld ? before!.descriptionRu : data.descriptionUz,
+    translate: true,
+  };
+}
 
 async function attachImages(tx: Prisma.TransactionClient, productId: number, imageIds: number[]) {
   const imgs = await tx.productImage.findMany({ where: { id: { in: imageIds } } });
@@ -126,10 +149,13 @@ manageRouter.post(
     const cat = await prisma.category.findUnique({ where: { id: data.categoryId } });
     if (!cat) throw badRequest('BAD_CATEGORY', 'Kategoriya topilmadi');
     const actor = req.actor!;
+    const ru = resolveRu(data);
     const created = await prisma.$transaction(async (tx) => {
       const p = await tx.product.create({
         data: {
           ...data,
+          nameRu: ru.nameRu,
+          descriptionRu: ru.descriptionRu,
           oldPrice: data.oldPrice || null,
           stock: round3(initialStock || 0),
           createdById: actor.userId,
@@ -152,6 +178,7 @@ manageRouter.post(
       }
       return p;
     });
+    if (ru.translate) enqueueTranslation('product', created.id);
     const full = await prisma.product.findUniqueOrThrow({ where: { id: created.id }, include: PRODUCT_INCLUDE });
     await audit(actor, 'product.create', 'Product', created.id, null, data);
     res.status(201).json(productDto(full, { staff: true }));
@@ -169,10 +196,15 @@ manageRouter.patch(
     const { imageIds, initialStock, ...data } = body;
     void initialStock;
     const actor = req.actor!;
+    const ru = resolveRu(data, before);
     const removed = await prisma.$transaction(async (tx) => {
-      await tx.product.update({ where: { id }, data: { ...data, oldPrice: data.oldPrice || null, updatedById: actor.userId } });
+      await tx.product.update({
+        where: { id },
+        data: { ...data, nameRu: ru.nameRu, descriptionRu: ru.descriptionRu, oldPrice: data.oldPrice || null, updatedById: actor.userId },
+      });
       return attachImages(tx, id, imageIds);
     });
+    if (ru.translate) enqueueTranslation('product', id);
     for (const r of removed) await removeUpload(r.originalUrl, r.originalThumb, r.aiUrl, r.aiThumb);
     const full = await prisma.product.findUniqueOrThrow({ where: { id }, include: PRODUCT_INCLUDE });
     const { stock, soldCount, ...beforeRest } = before;

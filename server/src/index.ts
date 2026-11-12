@@ -96,7 +96,8 @@ function buildApp() {
   } else {
     logger.warn({ WEB_DIST }, 'Frontend build topilmadi (npm run build)');
   }
-  app.get('/', (_req, res) => res.redirect('/admin/'));
+  // Bosh sahifa Mini App'ga olib boradi (BotFather'da faqat domen yozilgan bo'lsa ham ishlaydi); web panel: /admin
+  app.get('/', (_req, res) => res.redirect('/app/'));
 
   app.use(errorHandler);
   return app;

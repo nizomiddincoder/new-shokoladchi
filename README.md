@@ -33,9 +33,11 @@ Texnologiyalar: Node.js 20, TypeScript, Express, grammY (webhook), PostgreSQL + 
    > Tokenni hech kimga bermang. Agar tarqalib ketsa, BotFather'da `/revoke` qiling.
 5. (Ixtiyoriy) Bot rasmi va tavsifini qo'ying: `/setuserpic`, `/setdescription`.
 6. **Mini App URL'ini ulash** (Railway domeni tayyor bo'lgandan keyin, 2-bo'limdan so'ng):
-   - BotFather → `/mybots` → botingizni tanlang → **Bot Settings** → **Configure Mini App** → **Enable Mini App**
-   - URL sifatida kiriting: `https://SIZNING-DOMENINGIZ/app/`
-   > Bu qadam ixtiyoriy. Server ishga tushganda har bir foydalanuvchiga uning roliga mos **menyu tugmasini** o'zi o'rnatadi.
+   - BotFather → `/mybots` → botingiz → **Bot Settings** → **Mini Apps**
+   - **Menu Button** → URL: `https://SIZNING-DOMENINGIZ/app/`
+   - **Main App** → URL: `https://SIZNING-DOMENINGIZ/app/`
+   > Ikkalasida ham oxiri `/app/` bo'lishi shart. `/admin` — bu brauzer uchun web panel, uni BotFather'ga qo'ymang.
+   > Server ishga tushganda har bir foydalanuvchiga uning roliga mos menyu tugmasini o'zi ham o'rnatadi.
 
 ---
 
@@ -82,6 +84,8 @@ Ilova servisi → **Variables** → **Raw Editor** orqali bir yo'la qo'shish mum
 | `COURIERS_GROUP_CHAT_ID` | yo'q | Kuryerlar guruhi ID'si. Bo'sh bo'lsa, har bir faol kuryerga shaxsiy xabar boradi |
 | `GEMINI_API_KEY` | yo'q | Google AI Studio kaliti (4-bo'lim). Bo'lmasa AI o'chiq, original rasm ishlatiladi |
 | `GEMINI_IMAGE_MODEL` | yo'q | Standart: `gemini-2.5-flash-image` |
+| `GEMINI_TEXT_MODEL` | yo'q | O'zbekcha → ruscha avtomatik tarjima modeli. Standart: `gemini-2.5-flash` |
+| `GEMINI_IMAGE_SIZE` | yo'q | Faqat `2K`/`4K` ni qo'llaydigan modellar uchun (masalan `gemini-3-pro-image-preview`). Odatda bo'sh qoldiring |
 | `UPLOAD_DIR` | yo'q | `/data/uploads` (Volume bilan bir xil bo'lishi kerak) |
 | `TZ` | yo'q | `Asia/Tashkent` |
 | `SEED_DEMO_DATA` | yo'q | `true` bo'lsa, bo'sh bazaga 5 kategoriya va 20 ta namuna mahsulot qo'shiladi |
@@ -149,6 +153,11 @@ AI qanday ishlaydi:
 - Fonda (navbat, bir vaqtda 2 tadan) Gemini'ga yuboriladi va natija WebP'ga o'tkaziladi.
 - Formada **original va AI variant yonma-yon** ko'rinadi, siz asosiysini tanlaysiz (standart — AI). "Qayta generatsiya" tugmasi bor.
 - Gemini xato bersa yoki 60 soniyada javob bermasa, original rasm ishlatiladi. Mahsulotni saqlash AI'ni kutmaydi.
+- AI rasm sof oq fonda bo'ladi; server ortiqcha oq chetlarni kesib, mahsulotni kadrning ~90% iga kattalashtiradi.
+
+Gemini yana ikki ishni bajaradi:
+- **Avtomatik tarjima:** mahsulot, kategoriya va bannerlarda faqat o'zbekcha yoziladi, ruschasi saqlangandan keyin fonda tarjima qilinadi. Mahsulot formasidagi "Ruscha tarjima" bo'limida kerak bo'lsa qo'lda tuzatish mumkin.
+- **AI banner:** Bannerlar → Qo'shish → "AI bilan yaratish": 4 tagacha rasm (mahsulot, logo) yuklang, banner qanday bo'lishini yozing, xohlasangiz ustiga yoziladigan matnni kiriting → "Banner yaratish". Natija yoqmasa "Qayta yaratish".
 
 ---
 

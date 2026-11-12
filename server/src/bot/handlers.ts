@@ -43,11 +43,23 @@ export async function setMenuButtonFor(user: User) {
   );
 }
 
+/**
+ * Mini App tugmasi INLINE bo'lishi shart: reply (oddiy) klaviatura tugmasidan ochilgan
+ * Mini App'ga Telegram initData bermaydi va server foydalanuvchini taniy olmaydi.
+ */
 function mainKeyboard(user: User) {
   const lang = user.language;
   const label =
     user.role === 'ADMIN' ? t(lang, 'admin_panel') : user.role === 'CUSTOMER' ? t(lang, 'open_shop') : t(lang, 'staff_panel');
-  return new Keyboard().webApp(label, appUrl()).resized().persistent();
+  return new InlineKeyboard().webApp(label, appUrl());
+}
+
+/** Avval qolgan oddiy klaviaturani (eski versiya yoki "Raqamni ulashish") jimgina olib tashlaydi */
+async function removeReplyKeyboard(ctx: Context) {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const r = await safeCall(chatId, () => bot.api.sendMessage(chatId, '...', { reply_markup: { remove_keyboard: true } }));
+  if (r.ok) await safeCall(chatId, () => bot.api.deleteMessage(chatId, r.value.message_id));
 }
 
 async function sendMainMenu(ctx: Context, user: User, intro?: string) {
@@ -60,6 +72,7 @@ async function sendMainMenu(ctx: Context, user: User, intro?: string) {
       : user.role === 'CUSTOMER'
         ? t(lang, 'welcome_back', { name })
         : t(lang, 'welcome_staff', { name, role: roleName(lang, user.role) }));
+  await removeReplyKeyboard(ctx);
   await ctx.reply(text, { parse_mode: 'HTML', reply_markup: mainKeyboard(user) });
   await setMenuButtonFor(user);
 }

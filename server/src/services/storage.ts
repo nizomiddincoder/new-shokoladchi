@@ -19,7 +19,9 @@ function randomName() {
 export type SavedImage = { url: string; thumbUrl: string; filePath: string };
 
 /** Rasmni WebP'ga o'tkazib saqlaydi: max 1200px va 400px thumbnail */
-export async function saveImage(input: Buffer, folder: Folder): Promise<SavedImage> {
+export async function saveImage(input: Buffer, folder: Folder, opts: { quality?: number; maxSize?: number } = {}): Promise<SavedImage> {
+  const quality = opts.quality ?? 84;
+  const max = opts.maxSize ?? 1200;
   let meta;
   try {
     meta = await sharp(input).metadata();
@@ -32,8 +34,8 @@ export async function saveImage(input: Buffer, folder: Folder): Promise<SavedIma
   await fs.mkdir(dir, { recursive: true });
   const filePath = path.join(dir, `${name}.webp`);
   const thumbPath = path.join(dir, `${name}_t.webp`);
-  await sharp(input).rotate().resize(1200, 1200, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 }).toFile(filePath);
-  await sharp(input).rotate().resize(400, 400, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 78 }).toFile(thumbPath);
+  await sharp(input).rotate().resize(max, max, { fit: 'inside', withoutEnlargement: true }).webp({ quality }).toFile(filePath);
+  await sharp(input).rotate().resize(400, 400, { fit: 'inside', withoutEnlargement: true }).webp({ quality: Math.max(78, quality - 6) }).toFile(thumbPath);
   return {
     url: `/uploads/${folder}/${name}.webp`,
     thumbUrl: `/uploads/${folder}/${name}_t.webp`,

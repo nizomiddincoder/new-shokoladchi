@@ -14,6 +14,18 @@ export const tg: TgWebApp | null =
 
 export const isTelegram = !!tg;
 
+/** Telegram ichida ochilgan, lekin initData kelmagan (masalan oddiy klaviatura tugmasidan) */
+export const insideTelegramWithoutData =
+  !tg && typeof window !== 'undefined' && !!window.Telegram?.WebApp && window.Telegram.WebApp.platform !== 'unknown';
+
+export function closeApp() {
+  try {
+    window.Telegram?.WebApp?.close();
+  } catch {
+    /* noop */
+  }
+}
+
 const versionAtLeast = (v: string) => {
   try {
     return !!tg?.isVersionAtLeast?.(v);

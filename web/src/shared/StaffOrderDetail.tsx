@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Bike, Camera, CheckCheck, ChefHat, CircleX, HandCoins, PackageCheck, Scale, Truck } from 'lucide-react';
 import { get, post, upload } from './api';
+import { CameraCapture, cameraSupported } from './CameraCapture';
 import type { Order, Role } from './types';
 import { Button, Card, ErrorState, PageLoader, ReasonModal, useToast } from './ui';
 import { OrderContactBlock, OrderItemsList, OrderTimeline, OrderTotals, StatusBadge } from './orderParts';
@@ -32,6 +33,7 @@ export function StaffOrderDetail({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [weights, setWeights] = useState<Record<number, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
+  const [camOpen, setCamOpen] = useState(false);
 
   if (q.isLoading) return <PageLoader />;
   if (q.error || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
@@ -185,7 +187,8 @@ export function StaffOrderDetail({
         {isSellerSide && isMine && ['ACCEPTED', 'PREPARING'].includes(o.status) && (
           <>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onPhoto(e.target.files?.[0])} />
-            <Button block size="lg" icon={Camera} loading={busy === 'ready'} onClick={() => fileRef.current?.click()}>
+            <CameraCapture open={camOpen} onClose={() => setCamOpen(false)} onCapture={(f) => void onPhoto(f)} />
+            <Button block size="lg" icon={Camera} loading={busy === 'ready'} onClick={() => (cameraSupported() ? setCamOpen(true) : fileRef.current?.click())}>
               {t('staff.ready')}
             </Button>
             <p className="text-center text-[12px] text-muted">{t('staff.photoRequired')}</p>

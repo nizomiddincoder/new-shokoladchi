@@ -5,7 +5,7 @@ import { Ban, Send, Smartphone } from 'lucide-react';
 import { get } from '../shared/api';
 import type { Me } from '../shared/types';
 import { setLanguage } from '../shared/i18n';
-import { isTelegram, openBot } from '../shared/telegram';
+import { closeApp, insideTelegramWithoutData, isTelegram, openBot } from '../shared/telegram';
 import { Button, Empty, ErrorState, PageLoader } from '../shared/ui';
 import { CustomerApp } from './customer/CustomerApp';
 import { MeContext } from './meContext';
@@ -27,7 +27,25 @@ export function App() {
   if (!isTelegram) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Empty icon={Smartphone} title={t('gate.openInTelegram')} text={t('gate.openInTelegramText')} />
+        {insideTelegramWithoutData ? (
+          <Empty
+            icon={Send}
+            title={t('gate.reopenTitle')}
+            text={t('gate.reopenText')}
+            action={<Button onClick={closeApp}>{t('gate.backToBot')}</Button>}
+          />
+        ) : (
+          <Empty
+            icon={Smartphone}
+            title={t('gate.openInTelegram')}
+            text={t('gate.openInTelegramText')}
+            action={
+              <a href="/admin/" className="text-[14px] font-bold text-primary underline">
+                {t('admin.title')}
+              </a>
+            }
+          />
+        )}
       </div>
     );
   }

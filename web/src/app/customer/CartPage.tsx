@@ -1,16 +1,17 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, ShoppingCart, Trash2, Truck } from 'lucide-react';
-import { Button, Card, Empty, PageLoader, Stepper } from '../../shared/ui';
+import { Button, Card, Empty, PageLoader, Stepper, useToast } from '../../shared/ui';
 import { isWeighted, money, nameOf, unitLabel } from '../../shared/format';
 import { ProductThumb } from '../../shared/orderParts';
-import { isTelegram, useMainButton } from '../../shared/telegram';
+import { useMainButton } from '../../shared/telegram';
 import { Screen, TopTitle } from '../layout';
 import { useCart, useShopSettings } from './hooks';
 
 export function CartPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const toast = useToast();
   const cart = useCart();
   const settings = useShopSettings();
   const s = settings.data;
@@ -20,11 +21,17 @@ export function CartPage() {
   const canCheckout = cart.count > 0 && minLeft === 0 && !hasUnavailable;
   const approx = cart.items.some((i) => isWeighted(i.product.unit));
 
+  // Tugma o'chirilmaydi: sabab bo'lsa, mijozga aytiladi
+  const goCheckout = () => {
+    if (canCheckout) return navigate('/checkout');
+    if (hasUnavailable) toast.error(new Error(t('cart.unavailable')));
+    else if (s && minLeft > 0) toast.error(new Error(t('cart.minOrder', { sum: money(s.minOrderAmount), left: money(minLeft) })));
+  };
+
   useMainButton({
     text: `${t('cart.checkout')} · ${money(total)}`,
-    onClick: () => navigate('/checkout'),
+    onClick: goCheckout,
     visible: cart.count > 0,
-    disabled: !canCheckout,
   });
 
   if (cart.isLoading) return <PageLoader />;
@@ -90,11 +97,9 @@ export function CartPage() {
             </div>
           )}
 
-          {!isTelegram && (
-            <Button block size="lg" disabled={!canCheckout} onClick={() => navigate('/checkout')}>
-              {t('cart.checkout')} · {money(total)}
-            </Button>
-          )}
+          <Button block size="lg" onClick={goCheckout}>
+            {t('cart.checkout')} · {money(total)}
+          </Button>
         </div>
       )}
     </Screen>

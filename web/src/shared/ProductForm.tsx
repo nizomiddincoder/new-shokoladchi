@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Camera, ChevronLeft, ChevronRight, ImagePlus, Loader2, RefreshCw, Sparkles, Star, Trash2 } from 'lucide-react';
+import { Camera, ChevronDown, ChevronLeft, ChevronRight, ImagePlus, Languages, Loader2, RefreshCw, Sparkles, Star, Trash2 } from 'lucide-react';
 import { get, patch, post, upload } from './api';
+import { CameraCapture, cameraSupported } from './CameraCapture';
 import type { Category, Product, ProductImage, Unit } from './types';
 import { Button, Card, Field, PageLoader, Switch, clsx, useToast } from './ui';
 import { nameOf } from './format';
@@ -169,6 +170,9 @@ export function ProductForm({ productId, onSaved, onCancel }: { productId?: numb
   const [uploading, setUploading] = useState(0);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [ruOpen, setRuOpen] = useState(false);
+  const [camOpen, setCamOpen] = useState(false);
+  const [ruEdited, setRuEdited] = useState(false);
   const camRef = useRef<HTMLInputElement>(null);
   const galRef = useRef<HTMLInputElement>(null);
 
@@ -201,7 +205,7 @@ export function ProductForm({ productId, onSaved, onCancel }: { productId?: numb
 
   const onUnit = (u: Unit) => setForm((f) => ({ ...f, unit: u, step: String(DEFAULT_STEP[u]), minQty: String(DEFAULT_STEP[u]) }));
 
-  const onFiles = async (files: FileList | null) => {
+  const onFiles = async (files: FileList | File[] | null) => {
     if (!files?.length) return;
     const list = Array.from(files).slice(0, 5 - images.length);
     if (!list.length) return toast.info(t('pf.maxImages'));
@@ -232,7 +236,6 @@ export function ProductForm({ productId, onSaved, onCancel }: { productId?: numb
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.nameUz.trim()) e.nameUz = '!';
-    if (!form.nameRu.trim()) e.nameRu = '!';
     if (!form.categoryId) e.categoryId = '!';
     if (!(num(form.price) >= 0) || form.price === '') e.price = '!';
     if (form.oldPrice && num(form.oldPrice) <= num(form.price)) e.oldPrice = t('pf.oldPriceHint');
@@ -248,9 +251,9 @@ export function ProductForm({ productId, onSaved, onCancel }: { productId?: numb
     try {
       const body = {
         nameUz: form.nameUz.trim(),
-        nameRu: form.nameRu.trim(),
         descriptionUz: form.descriptionUz.trim(),
-        descriptionRu: form.descriptionRu.trim(),
+        // Ruscha faqat qo'lda tuzatilgan bo'lsa yuboriladi, aks holda server avtomatik tarjima qiladi
+        ...(ruEdited && form.nameRu.trim() ? { nameRu: form.nameRu.trim(), descriptionRu: form.descriptionRu.trim() } : {}),
         categoryId: Number(form.categoryId),
         price: Math.round(num(form.price)),
         oldPrice: form.oldPrice ? Math.round(num(form.oldPrice)) : null,
@@ -278,6 +281,7 @@ export function ProductForm({ productId, onSaved, onCancel }: { productId?: numb
 
   return (
     <div className="space-y-3 pb-6">
+      <CameraCapture open={camOpen} onClose={() => setCamOpen(false)} onCapture={(f) => void onFiles([f])} />
       <Card className="p-4">
         <div className="mb-2 text-[13px] font-bold text-primary-dark">{t('pf.images')}</div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -302,26 +306,57 @@ export function ProductForm({ productId, onSaved, onCancel }: { productId?: numb
           <div className="mt-3 grid grid-cols-2 gap-2">
             <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onFiles(e.target.files)} />
             <input ref={galRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => onFiles(e.target.files)} />
-            <Button type="button" variant="secondary" icon={Camera} onClick={() => camRef.current?.click()}>{t('pf.takePhoto')}</Button>
+            <Button type="button" variant="secondary" icon={Camera} onClick={() => (cameraSupported() ? setCamOpen(true) : camRef.current?.click())}>
+              {t('pf.takePhoto')}
+            </Button>
             <Button type="button" variant="outline" icon={ImagePlus} onClick={() => galRef.current?.click()}>{t('pf.gallery')}</Button>
           </div>
         )}
       </Card>
 
       <Card className="space-y-3 p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label={t('pf.nameUz')} error={errors.nameUz}>
-            <input className="input" value={form.nameUz} onChange={(e) => set('nameUz', e.target.value)} maxLength={200} />
-          </Field>
-          <Field label={t('pf.nameRu')} error={errors.nameRu}>
-            <input className="input" value={form.nameRu} onChange={(e) => set('nameRu', e.target.value)} maxLength={200} />
-          </Field>
-          <Field label={t('pf.descUz')}>
-            <textarea className="input min-h-[80px]" value={form.descriptionUz} onChange={(e) => set('descriptionUz', e.target.value)} />
-          </Field>
-          <Field label={t('pf.descRu')}>
-            <textarea className="input min-h-[80px]" value={form.descriptionRu} onChange={(e) => set('descriptionRu', e.target.value)} />
-          </Field>
+        <Field label={t('pf.nameUz')} error={errors.nameUz}>
+          <input className="input" value={form.nameUz} onChange={(e) => set('nameUz', e.target.value)} maxLength={200} />
+        </Field>
+        <Field label={t('pf.descUz')}>
+          <textarea className="input min-h-[80px]" value={form.descriptionUz} onChange={(e) => set('descriptionUz', e.target.value)} />
+        </Field>
+        <div className="rounded-xl bg-surface">
+          <button type="button" onClick={() => setRuOpen((v) => !v)} className="flex w-full items-center justify-between px-3 py-2.5 text-left text-[13px] font-semibold text-primary-dark">
+            <span className="flex items-center gap-1.5">
+              <Languages className="h-4 w-4 text-primary-light" />
+              {t('pf.ruSection')}
+            </span>
+            <ChevronDown className={clsx('h-4 w-4 transition', ruOpen && 'rotate-180')} />
+          </button>
+          {ruOpen && (
+            <div className="space-y-2.5 px-3 pb-3">
+              <p className="text-[12px] text-muted">{t('pf.ruHint')}</p>
+              <Field label={t('pf.nameRu')}>
+                <input
+                  className="input"
+                  value={form.nameRu}
+                  placeholder={t('pf.ruAuto')}
+                  onChange={(e) => {
+                    set('nameRu', e.target.value);
+                    setRuEdited(true);
+                  }}
+                  maxLength={200}
+                />
+              </Field>
+              <Field label={t('pf.descRu')}>
+                <textarea
+                  className="input min-h-[70px]"
+                  value={form.descriptionRu}
+                  placeholder={t('pf.ruAuto')}
+                  onChange={(e) => {
+                    set('descriptionRu', e.target.value);
+                    setRuEdited(true);
+                  }}
+                />
+              </Field>
+            </div>
+          )}
         </div>
         <Field label={t('pf.category')} error={errors.categoryId}>
           <select className="input" value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)}>
