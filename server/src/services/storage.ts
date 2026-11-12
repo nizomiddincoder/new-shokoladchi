@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import { env } from '../env';
 import { badRequest } from '../lib/errors';
 
-export const FOLDERS = ['products', 'orders', 'banners', 'broadcasts'] as const;
+export const FOLDERS = ['products', 'orders', 'banners', 'broadcasts', 'categories', 'branding'] as const;
 export type Folder = (typeof FOLDERS)[number];
 
 export async function ensureUploadDirs() {

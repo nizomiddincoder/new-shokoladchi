@@ -74,3 +74,23 @@ export function CategoryIcon({ name, className }: { name: string; className?: st
   const Icon = CATEGORY_ICONS[name] || ShoppingBasket;
   return <Icon className={className} strokeWidth={1.9} />;
 }
+
+/** Kategoriya ko'rinishi: rasm bo'lsa rasm, bo'lmasa nomiga mos ikonka */
+export function CategoryVisual({
+  cat,
+  className = 'h-16 w-16 rounded-2xl',
+  iconClassName = 'h-7 w-7',
+}: {
+  cat: { iconName: string; imageUrl?: string | null };
+  className?: string;
+  iconClassName?: string;
+}) {
+  if (cat.imageUrl) {
+    return <img src={cat.imageUrl} alt="" loading="lazy" className={`shrink-0 bg-white object-cover ${className}`} />;
+  }
+  return (
+    <span className={`flex shrink-0 items-center justify-center bg-primary-soft ${className}`}>
+      <CategoryIcon name={cat.iconName} className={`text-primary ${iconClassName}`} />
+    </span>
+  );
+}

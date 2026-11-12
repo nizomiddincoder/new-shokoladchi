@@ -14,7 +14,7 @@ export function StaffOrderCard({ o, onClick }: { o: Order; onClick: () => void }
     <Card className="p-4" onClick={onClick}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="text-[16px] font-extrabold text-ink">#{o.number}</div>
+          <div className="font-display text-[19px] font-bold text-ink">#{o.number}</div>
           <div className="text-[12px] text-muted">{dateTime(o.createdAt)}</div>
         </div>
         <StatusBadge status={o.status} />
@@ -32,7 +32,7 @@ export function StaffOrderCard({ o, onClick }: { o: Order; onClick: () => void }
         </div>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-[15px] font-extrabold text-primary">{money(o.finalTotal)}</span>
+        <span className="font-display text-[17px] font-bold text-primary">{money(o.finalTotal)}</span>
         <ChevronRight className="h-5 w-5 text-muted" />
       </div>
     </Card>
@@ -242,7 +242,7 @@ export function MovementsList({ productId, compact }: { productId?: number; comp
       )}
       {q.isLoading && <OrdersListSkeleton />}
       {q.data?.items.length === 0 && <Empty icon={PackageSearch} title={t('common.empty')} />}
-      <div className="divide-y divide-line rounded-2xl bg-white shadow-card">
+      <div className="divide-y divide-line rounded-2xl bg-card shadow-card">
         {q.data?.items.map((m) => (
           <div key={m.id} className="flex items-center gap-3 px-3.5 py-2.5">
             <div className="min-w-0 flex-1">
@@ -281,7 +281,7 @@ export function LowStockList({ onOpen }: { onOpen: (p: Product) => void }) {
   if (!q.data?.length) return <Empty icon={PackageSearch} title={t('common.empty')} />;
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 rounded-2xl bg-[#FBEAE8] px-3.5 py-3 text-[14px] font-bold text-danger">
+      <div className="flex items-center gap-2 rounded-2xl bg-danger-soft px-3.5 py-3 text-[14px] font-bold text-danger">
         <AlertTriangle className="h-5 w-5" />
         {t('staff.lowCount', { count: q.data.length })}
       </div>

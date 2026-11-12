@@ -35,13 +35,13 @@ export function OrdersPage() {
             <div className="mt-3 flex items-center justify-between">
               <div className="flex -space-x-2">
                 {o.items.slice(0, 4).map((i) => (
-                  <ProductThumb key={i.id} url={i.thumbUrl} className="h-9 w-9 rounded-full border-2 border-white" />
+                  <ProductThumb key={i.id} url={i.thumbUrl} className="h-9 w-9 rounded-full border-2 border-card" />
                 ))}
                 {o.items.length > 4 && (
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-primary-soft text-[11px] font-bold text-primary-dark">+{o.items.length - 4}</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-card bg-primary-soft text-[11px] font-bold text-primary-dark">+{o.items.length - 4}</span>
                 )}
               </div>
-              <div className="flex items-center gap-1 text-[15px] font-extrabold text-primary">
+              <div className="flex items-center gap-1 font-display text-[17px] font-bold text-primary">
                 {money(o.finalTotal)}
                 <ChevronRight className="h-4 w-4 text-muted" />
               </div>

@@ -214,6 +214,72 @@ export async function generateBanner(input: { description: string; headline?: st
   }
 }
 
+// ================= KATEGORIYA RASMI =================
+
+function categoryPrompt(nameUz: string, nameRu: string) {
+  return [
+    `Professional appetizing e-commerce photo representing the grocery store category "${nameUz}"${nameRu && nameRu !== nameUz ? ` (in Russian: "${nameRu}")` : ''}.`,
+    'Show a neat, attractive arrangement of the most typical real products of this category, as one tight group.',
+    'Background: pure solid white (#FFFFFF), clean and empty, no props, no text, no letters, no logos, no labels with words.',
+    'The products must be large and fill about 85-90% of the square frame, centered, bright even studio lighting, crisp sharp focus, high detail.',
+  ].join(' ');
+}
+
+async function processCategoryImage(categoryId: number) {
+  if (!client) return;
+  const cat = await prisma.category.findUnique({ where: { id: categoryId } });
+  if (!cat) return;
+  await prisma.category.update({ where: { id: categoryId }, data: { imageStatus: 'PROCESSING' } });
+  const started = Date.now();
+  try {
+    const response = await withTimeout(
+      client.models.generateContent({
+        model: env.GEMINI_IMAGE_MODEL,
+        contents: [{ role: 'user', parts: [{ text: categoryPrompt(cat.nameUz, cat.nameRu) }] }],
+        config: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { aspectRatio: '1:1' } },
+      }),
+      TIMEOUT_MS,
+    );
+    const out = (response.candidates?.[0]?.content?.parts ?? []).find((p) => p.inlineData?.data);
+    if (!out?.inlineData?.data) throw new Error('Gemini rasm qaytarmadi');
+    const saved = await saveImage(await fitProductOnWhite(Buffer.from(out.inlineData.data, 'base64')), 'categories', { quality: 90, maxSize: 600 });
+    // Shu orada admin o'zi rasm yuklagan bo'lsa, AI rasm bilan almashtirmaymiz
+    const res = await prisma.category.updateMany({
+      where: { id: categoryId, imageStatus: 'PROCESSING' },
+      data: { imageUrl: saved.url, imageStatus: 'DONE' },
+    });
+    if (res.count === 0) await removeUpload(saved.url, saved.thumbUrl);
+    else if (cat.imageUrl?.startsWith('/uploads/categories/')) await removeUpload(cat.imageUrl);
+    await prisma.aiCall.create({ data: { model: env.GEMINI_IMAGE_MODEL, success: true, durationMs: Date.now() - started } });
+  } catch (err) {
+    const message = (err as Error)?.message?.slice(0, 500) || 'xato';
+    logger.warn({ err: message, categoryId }, 'Kategoriya rasmi yaratilmadi');
+    await prisma.category.updateMany({ where: { id: categoryId, imageStatus: 'PROCESSING' }, data: { imageStatus: 'FAILED' } });
+    await prisma.aiCall
+      .create({ data: { model: env.GEMINI_IMAGE_MODEL, success: false, error: message, durationMs: Date.now() - started } })
+      .catch(() => undefined);
+  }
+}
+
+/** Kategoriya uchun AI rasm yaratishni navbatga qo'yadi (rasm yuklanmagan bo'lsa) */
+export async function enqueueCategoryImage(categoryId: number) {
+  if (!client) return false;
+  await prisma.category.update({ where: { id: categoryId }, data: { imageStatus: 'PENDING' } });
+  void queue.add(() => processCategoryImage(categoryId));
+  return true;
+}
+
+/** Rasmsiz kategoriyalarga (masalan seed qilinganlar) avtomatik rasm yaratadi */
+export async function fillMissingCategoryImages() {
+  if (!client) return;
+  const cats = await prisma.category.findMany({
+    where: { OR: [{ imageUrl: null, imageStatus: 'NONE' }, { imageStatus: { in: ['PENDING', 'PROCESSING'] } }] },
+    select: { id: true },
+  });
+  for (const c of cats) await enqueueCategoryImage(c.id);
+  if (cats.length) logger.info({ count: cats.length }, 'Kategoriya rasmlari navbatga qo\'yildi');
+}
+
 /** Server qayta ishga tushganda yarim qolgan vazifalarni navbatga qaytaradi */
 export async function resumePendingAi() {
   const pending = await prisma.productImage.findMany({

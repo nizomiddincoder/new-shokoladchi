@@ -36,7 +36,7 @@ export function CatalogPage() {
   return (
     <Screen>
       <TopTitle title={t('nav.catalog')} />
-      <div className="sticky top-0 z-20 space-y-2.5 bg-white/95 pb-3 pt-1 backdrop-blur">
+      <div className="sticky top-0 z-20 space-y-2.5 bg-card/95 pb-3 pt-1 backdrop-blur">
         <div className="no-scrollbar flex gap-2 overflow-x-auto px-4">
           <button onClick={() => setParam('category', '')} className={clsx('chip', !categoryId && !discounted && 'chip-active')}>
             {t('common.all')}
@@ -44,7 +44,11 @@ export function CatalogPage() {
           {discounted && <button className="chip chip-active">{t('shop.discounted')}</button>}
           {cats.data?.map((c) => (
             <button key={c.id} onClick={() => setParam('category', String(c.id))} className={clsx('chip', categoryId === String(c.id) && 'chip-active')}>
-              <CategoryIcon name={c.iconName} className="h-4 w-4" />
+              {c.imageUrl ? (
+                <img src={c.imageUrl} alt="" className="-ml-2 h-6 w-6 rounded-full bg-white object-cover" />
+              ) : (
+                <CategoryIcon name={c.iconName} className="h-4 w-4" />
+              )}
               {nameOf(c)}
             </button>
           ))}

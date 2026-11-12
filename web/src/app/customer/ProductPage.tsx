@@ -99,14 +99,14 @@ export function ProductPage() {
 
       <div className="space-y-4 px-4 pt-4">
         <div>
-          <h1 className="text-[21px] font-extrabold leading-tight text-ink">{nameOf(p)}</h1>
+          <h1 className="font-display text-[25px] font-bold leading-tight text-ink">{nameOf(p)}</h1>
           <div className="mt-1 text-[13px] text-muted">{nameOf(p.category)}</div>
         </div>
 
         <div className="flex items-end justify-between gap-3">
           <div>
             {p.oldPrice && p.oldPrice > p.price && <div className="text-[14px] text-muted line-through">{money(p.oldPrice)}</div>}
-            <div className="text-[24px] font-extrabold text-primary">
+            <div className="font-display text-[27px] font-bold text-primary">
               {money(p.price)} <span className="text-[15px] font-semibold text-muted">/ {unitLabel(p.unit)}</span>
             </div>
           </div>
@@ -154,7 +154,7 @@ export function ProductPage() {
       </div>
 
       {p.inStock && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white px-4 pt-3" style={{ paddingBottom: 'calc(var(--safe-bottom) + 12px)' }}>
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card px-4 pt-3" style={{ paddingBottom: 'calc(var(--safe-bottom) + 12px)' }}>
           <div className="mx-auto flex max-w-xl gap-2">
             <Button variant="secondary" size="lg" className="shrink-0 whitespace-nowrap px-3 text-[13.5px]" icon={ShoppingCart} loading={busy} onClick={() => addToCart(false)}>
               {inCart ? t('product.inCart') : t('product.addToCart')}

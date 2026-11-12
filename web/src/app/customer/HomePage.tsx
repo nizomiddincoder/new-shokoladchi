@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Clock, Search, Store } from 'lucide-react';
+import { Clock, Search } from 'lucide-react';
 import { get } from '../../shared/api';
 import type { Banner, Category, Product, PublicSettings } from '../../shared/types';
-import { ErrorState, SectionTitle, Skeleton } from '../../shared/ui';
-import { CategoryIcon } from '../../shared/icons';
+import { ErrorState, SectionTitle, Skeleton, ThemeToggle } from '../../shared/ui';
+import { CategoryVisual } from '../../shared/icons';
+import { ShopLogo } from '../../shared/branding';
 import { nameOf } from '../../shared/format';
 import { useBackButton } from '../../shared/telegram';
 import { Screen } from '../layout';
@@ -29,11 +30,9 @@ export function HomePage() {
     <Screen>
       <div className="px-4 pt-4">
         <div className="mb-3 flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-white">
-            <Store className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-[18px] font-extrabold text-ink">{d?.settings.shopName || ' '}</div>
+          <ShopLogo url={d?.settings.logoUrl} className="h-11 w-11" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-display text-[22px] font-bold leading-tight text-primary-dark">{d?.settings.shopName || ' '}</div>
             {d && (
               <div className="flex items-center gap-1 text-[12px] font-medium text-muted">
                 <Clock className="h-3.5 w-3.5" />
@@ -41,6 +40,7 @@ export function HomePage() {
               </div>
             )}
           </div>
+          <ThemeToggle />
         </div>
         <button onClick={() => navigate('/search')} className="flex h-12 w-full items-center gap-2.5 rounded-2xl border border-line bg-surface px-4 text-left text-[15px] text-muted">
           <Search className="h-5 w-5" />
@@ -78,9 +78,7 @@ export function HomePage() {
             ))}
           {d?.categories.map((c) => (
             <button key={c.id} onClick={() => navigate(`/catalog?category=${c.id}`)} className="flex flex-col items-center gap-1.5">
-              <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-soft">
-                <CategoryIcon name={c.iconName} className="h-7 w-7 text-primary" />
-              </span>
+              <CategoryVisual cat={c} className="h-16 w-16 rounded-2xl shadow-card" />
               <span className="line-clamp-2 text-center text-[11.5px] font-semibold leading-tight text-ink">{nameOf(c)}</span>
             </button>
           ))}

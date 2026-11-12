@@ -23,6 +23,8 @@ type Dash = {
   couriers: { id: number; name: string; delivered: number; avgDeliveryMin: number | null }[];
 };
 
+const TOOLTIP_STYLE = { background: 'rgb(var(--c-card))', border: '1px solid rgb(var(--c-line))', borderRadius: 12, color: 'rgb(var(--c-ink))' };
+
 const compact = (n: number) => (n >= 1_000_000 ? `${Math.round(n / 100_000) / 10}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
 
 export function DashboardPage() {
@@ -56,11 +58,11 @@ export function DashboardPage() {
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={d.daily} margin={{ left: -10, right: 8, top: 8 }}>
-                      <CartesianGrid stroke="#EADFD7" strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tickFormatter={(v: string) => v.slice(5)} fontSize={11} stroke="#8C7B70" />
-                      <YAxis tickFormatter={compact} fontSize={11} stroke="#8C7B70" />
-                      <Tooltip formatter={(v: number) => money(v)} labelStyle={{ fontWeight: 700 }} />
-                      <Line type="monotone" dataKey="revenue" stroke="#6F4E37" strokeWidth={2.5} dot={{ r: 2.5 }} name={t('admin.revenue')} />
+                      <CartesianGrid stroke="rgb(var(--c-line))" strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tickFormatter={(v: string) => v.slice(5)} fontSize={11} stroke="rgb(var(--c-muted))" />
+                      <YAxis tickFormatter={compact} fontSize={11} stroke="rgb(var(--c-muted))" />
+                      <Tooltip formatter={(v: number) => money(v)} labelStyle={{ fontWeight: 700 }} contentStyle={TOOLTIP_STYLE} />
+                      <Line type="monotone" dataKey="revenue" stroke="rgb(var(--c-primary))" strokeWidth={2.5} dot={{ r: 2.5 }} name={t('admin.revenue')} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -70,11 +72,11 @@ export function DashboardPage() {
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={d.hours} margin={{ left: -20, right: 8, top: 8 }}>
-                      <CartesianGrid stroke="#EADFD7" strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="hour" fontSize={11} stroke="#8C7B70" />
-                      <YAxis allowDecimals={false} fontSize={11} stroke="#8C7B70" />
-                      <Tooltip labelFormatter={(h) => `${String(h).padStart(2, '0')}:00`} />
-                      <Bar dataKey="orders" fill="#A47551" radius={[6, 6, 0, 0]} name={t('admin.ordersCount')} />
+                      <CartesianGrid stroke="rgb(var(--c-line))" strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="hour" fontSize={11} stroke="rgb(var(--c-muted))" />
+                      <YAxis allowDecimals={false} fontSize={11} stroke="rgb(var(--c-muted))" />
+                      <Tooltip labelFormatter={(h) => `${String(h).padStart(2, '0')}:00`} contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgb(var(--c-primary-soft))' }} />
+                      <Bar dataKey="orders" fill="rgb(var(--c-primary-light))" radius={[6, 6, 0, 0]} name={t('admin.ordersCount')} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

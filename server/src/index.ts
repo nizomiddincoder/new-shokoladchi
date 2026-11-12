@@ -22,7 +22,7 @@ import { manageRouter } from './routes/manage';
 import { adminRouter } from './routes/admin';
 import { ensureUploadDirs } from './services/storage';
 import { startCron } from './services/cron';
-import { resumePendingAi } from './services/ai';
+import { fillMissingCategoryImages, resumePendingAi } from './services/ai';
 import { runBroadcasts } from './services/broadcast';
 import { seedDemoData } from './seed';
 
@@ -73,6 +73,16 @@ function buildApp() {
   const apiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false });
   app.use('/api', apiLimiter);
   app.use('/api/auth', authRouter);
+  // Ochiq: do'kon nomi va logosi (web admin login sahifasi uchun)
+  app.get('/api/public/branding', async (_req, res, next) => {
+    try {
+      const s = await getSettings();
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.json({ shopName: s.shopName, logoUrl: s.logoUrl });
+    } catch (e) {
+      next(e);
+    }
+  });
   app.use('/api/catalog', authenticate, requireRegistered, catalogRouter);
   app.use('/api/shop', authenticate, requireRegistered, customerRouter);
   app.use('/api/staff', authenticate, requireRegistered, staffRouter);
@@ -146,6 +156,7 @@ async function main() {
 
   startCron();
   void resumePendingAi();
+  void fillMissingCategoryImages();
   void runBroadcasts();
 
   const shutdown = async (signal: string) => {

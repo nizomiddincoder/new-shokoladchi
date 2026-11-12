@@ -39,11 +39,7 @@ export function initTelegram() {
   try {
     tg.ready();
     tg.expand();
-    if (versionAtLeast('6.1')) {
-      tg.setHeaderColor('#FFFFFF');
-      tg.setBackgroundColor('#FFFFFF');
-    }
-    if (versionAtLeast('7.10')) tg.setBottomBarColor?.('#FFFFFF');
+    // Sarlavha va fon ranglarini theme.ts (kun/tun) o'rnatadi
     if (versionAtLeast('7.7')) tg.disableVerticalSwipes?.();
   } catch {
     /* eski versiyalar */

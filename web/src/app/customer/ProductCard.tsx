@@ -31,12 +31,12 @@ export function ProductCard({ p }: { p: Product }) {
             haptic('light');
             void fav.toggle(p.id);
           }}
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-card"
+          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-card/90 shadow-card"
         >
           <Heart className={clsx('h-[17px] w-[17px]', isFav ? 'fill-danger text-danger' : 'text-muted')} />
         </button>
         {!p.inStock && (
-          <div className="absolute inset-x-0 bottom-0 bg-ink/60 py-1 text-center text-[11px] font-bold text-white">{t('product.outOfStock')}</div>
+          <div className="absolute inset-x-0 bottom-0 bg-black/60 py-1 text-center text-[11px] font-bold text-white">{t('product.outOfStock')}</div>
         )}
       </div>
       <div className="flex flex-1 flex-col p-3 pt-2.5">
@@ -46,7 +46,7 @@ export function ProductCard({ p }: { p: Product }) {
         <div className="mt-auto flex items-end justify-between gap-1 pt-2">
           <div className="min-w-0">
             {p.oldPrice && p.oldPrice > p.price && <div className="text-[11px] text-muted line-through">{money(p.oldPrice)}</div>}
-            <div className="text-[14.5px] font-extrabold leading-tight text-primary">{money(p.price)}</div>
+            <div className="font-display text-[16px] font-bold leading-tight text-primary">{money(p.price)}</div>
             <div className="text-[11px] font-medium text-muted">/ {unitLabel(p.unit)}</div>
           </div>
           {p.inStock &&

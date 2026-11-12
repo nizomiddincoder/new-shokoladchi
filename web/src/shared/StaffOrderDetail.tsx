@@ -90,7 +90,7 @@ export function StaffOrderDetail({
       <Card className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <div className="text-[20px] font-extrabold text-ink">#{o.number}</div>
+            <div className="font-display text-[24px] font-bold text-ink">#{o.number}</div>
             <div className="text-[12px] text-muted">{dateTime(o.createdAt)}</div>
           </div>
           <StatusBadge status={o.status} />

@@ -11,6 +11,7 @@ export const catalogRouter = Router();
 export function publicSettings(s: Awaited<ReturnType<typeof getSettings>>) {
   return {
     shopName: s.shopName,
+    logoUrl: s.logoUrl,
     shopPhone: s.shopPhone,
     shopAddress: s.shopAddress,
     shopLat: s.shopLat,

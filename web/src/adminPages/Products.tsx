@@ -203,7 +203,7 @@ export function ProductsPage() {
             <div className="space-y-2">
               {q.data.items.map((p) => (
                 <Card key={p.id} className="flex items-center gap-3 p-2.5">
-                  <input type="checkbox" className="h-4 w-4 accent-[#6F4E37]" checked={selected.includes(p.id)} onChange={(e) => setSelected((s) => (e.target.checked ? [...s, p.id] : s.filter((x) => x !== p.id)))} />
+                  <input type="checkbox" className="h-4 w-4 accent-primary" checked={selected.includes(p.id)} onChange={(e) => setSelected((s) => (e.target.checked ? [...s, p.id] : s.filter((x) => x !== p.id)))} />
                   <ProductThumb url={p.image?.thumbUrl} className="h-12 w-12 rounded-xl" />
                   <button className="min-w-0 flex-1 text-left" onClick={() => navigate(`/products/${p.id}`)}>
                     <div className="truncate text-[14px] font-semibold">{nameOf(p)}</div>
@@ -223,7 +223,7 @@ export function ProductsPage() {
                 <thead>
                   <tr>
                     <th>
-                      <input type="checkbox" className="h-4 w-4 accent-[#6F4E37]" checked={allSel} onChange={(e) => setSelected(e.target.checked ? q.data!.items.map((p) => p.id) : [])} />
+                      <input type="checkbox" className="h-4 w-4 accent-primary" checked={allSel} onChange={(e) => setSelected(e.target.checked ? q.data!.items.map((p) => p.id) : [])} />
                     </th>
                     <th></th>
                     <th>{t('common.name')}</th>
@@ -238,7 +238,7 @@ export function ProductsPage() {
                   {q.data.items.map((p, i) => (
                     <tr key={p.id}>
                       <td>
-                        <input type="checkbox" className="h-4 w-4 accent-[#6F4E37]" checked={selected.includes(p.id)} onChange={(e) => setSelected((s) => (e.target.checked ? [...s, p.id] : s.filter((x) => x !== p.id)))} />
+                        <input type="checkbox" className="h-4 w-4 accent-primary" checked={selected.includes(p.id)} onChange={(e) => setSelected((s) => (e.target.checked ? [...s, p.id] : s.filter((x) => x !== p.id)))} />
                       </td>
                       <td><ProductThumb url={p.image?.thumbUrl} className="h-10 w-10 rounded-lg" /></td>
                       <td>
@@ -266,7 +266,7 @@ export function ProductsPage() {
                             {p.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </button>
                           <button className="rounded-lg p-1.5 text-primary hover:bg-surface" onClick={() => navigate(`/products/${p.id}`)} title={t('common.edit')}><Pencil className="h-4 w-4" /></button>
-                          <button className="rounded-lg p-1.5 text-danger hover:bg-[#FBEAE8]" onClick={() => setToDelete(p)} title={t('common.delete')}><Trash2 className="h-4 w-4" /></button>
+                          <button className="rounded-lg p-1.5 text-danger hover:bg-danger-soft" onClick={() => setToDelete(p)} title={t('common.delete')}><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </td>
                     </tr>
@@ -298,136 +298,3 @@ export function ProductEditPage() {
   );
 }
 
-// ================= KATEGORIYALAR =================
-type CatForm = { id?: number; nameUz: string; nameRu: string; iconName: string; isActive: boolean };
-
-export function CategoriesPage() {
-  const { t } = useTranslation();
-  const toast = useToast();
-  const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['admin-categories'], queryFn: () => get<Category[]>('/admin/categories') });
-  const [form, setForm] = useState<CatForm | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [toDelete, setToDelete] = useState<Category | null>(null);
-
-  const refresh = async () => {
-    await qc.invalidateQueries({ queryKey: ['admin-categories'] });
-    await qc.invalidateQueries({ queryKey: ['manage-categories'] });
-    await qc.invalidateQueries({ queryKey: ['categories'] });
-  };
-  const save = async () => {
-    if (!form) return;
-    setBusy(true);
-    try {
-      // Ruscha nom server tomonida avtomatik tarjima qilinadi
-      const body = { nameUz: form.nameUz.trim(), iconName: form.iconName, isActive: form.isActive };
-      if (form.id) await patch(`/admin/categories/${form.id}`, body);
-      else await post('/admin/categories', { ...body, sortOrder: (q.data?.length || 0) + 1 });
-      toast.success(t('common.saved'));
-      setForm(null);
-      await refresh();
-    } catch (e) {
-      toast.error(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const move = async (i: number, dir: -1 | 1) => {
-    const list = q.data;
-    if (!list) return;
-    const j = i + dir;
-    if (j < 0 || j >= list.length) return;
-    const ids = list.map((c) => c.id);
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    try {
-      await post('/admin/categories/reorder', { ids });
-      await refresh();
-    } catch (e) {
-      toast.error(e);
-    }
-  };
-  const remove = async () => {
-    if (!toDelete) return;
-    try {
-      await del(`/admin/categories/${toDelete.id}`);
-      setToDelete(null);
-      await refresh();
-    } catch (e) {
-      toast.error(e);
-      setToDelete(null);
-    }
-  };
-
-  return (
-    <AdminPage
-      title={t('admin.categories')}
-      actions={<Button size="sm" icon={Plus} onClick={() => setForm({ nameUz: '', nameRu: '', iconName: 'ShoppingBasket', isActive: true })}>{t('common.add')}</Button>}
-    >
-      {q.isLoading && <OrdersListSkeleton />}
-      {q.error && <ErrorState error={q.error} onRetry={() => q.refetch()} />}
-      <div className="space-y-2">
-        {q.data?.map((c, i) => (
-          <Card key={c.id} className="flex items-center gap-3 p-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-soft">
-              <CategoryIcon name={c.iconName} className="h-5 w-5 text-primary" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold">{c.nameUz} <span className="text-muted">/ {c.nameRu}</span></div>
-              <div className="text-[12px] text-muted">
-                {c._count?.products ?? 0} {t('nav.products').toLowerCase()}
-                {!c.isActive && <Badge tone="muted" className="ml-2">{t('common.inactive')}</Badge>}
-              </div>
-            </div>
-            <div className="flex items-center">
-              <button className="rounded-lg p-1.5 text-muted hover:bg-surface disabled:opacity-30" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t('admin.moveUp')}><ArrowUp className="h-4 w-4" /></button>
-              <button className="rounded-lg p-1.5 text-muted hover:bg-surface disabled:opacity-30" disabled={i === (q.data?.length || 0) - 1} onClick={() => move(i, 1)} aria-label={t('admin.moveDown')}><ArrowDown className="h-4 w-4" /></button>
-              <button className="rounded-lg p-1.5 text-primary hover:bg-surface" onClick={() => setForm({ id: c.id, nameUz: c.nameUz, nameRu: c.nameRu, iconName: c.iconName, isActive: c.isActive })} aria-label={t('common.edit')}><Pencil className="h-4 w-4" /></button>
-              <button className="rounded-lg p-1.5 text-danger hover:bg-[#FBEAE8]" onClick={() => setToDelete(c)} aria-label={t('common.delete')}><Trash2 className="h-4 w-4" /></button>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      <Modal
-        open={!!form}
-        onClose={() => setForm(null)}
-        title={form?.id ? t('common.edit') : t('admin.newCategory')}
-        footer={
-          <div className="pb-2">
-            <Button block loading={busy} disabled={!form?.nameUz.trim()} onClick={save}>{t('common.save')}</Button>
-          </div>
-        }
-      >
-        {form && (
-          <div className="space-y-3">
-            <Field label={t('pf.nameUz')}>
-              <input className="input" value={form.nameUz} onChange={(e) => setForm({ ...form, nameUz: e.target.value })} />
-            </Field>
-            {form.id && form.nameRu && (
-              <div className="text-[12px] text-muted">
-                {t('pf.nameRu')}: <span className="font-semibold text-ink">{form.nameRu}</span>
-              </div>
-            )}
-            <Field label={t('admin.icon')}>
-              <div className="grid grid-cols-8 gap-1.5">
-                {Object.keys(CATEGORY_ICONS).map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    title={name}
-                    onClick={() => setForm({ ...form, iconName: name })}
-                    className={clsx('flex aspect-square items-center justify-center rounded-xl border', form.iconName === name ? 'border-primary bg-primary text-white' : 'border-line text-primary')}
-                  >
-                    <CategoryIcon name={name} className="h-5 w-5" />
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Switch checked={form.isActive} onChange={(v) => setForm({ ...form, isActive: v })} label={t('common.active')} />
-          </div>
-        )}
-      </Modal>
-      <ConfirmModal open={!!toDelete} onClose={() => setToDelete(null)} onConfirm={remove} danger title={`${t('common.delete')}: ${toDelete?.nameUz || ''}`} />
-    </AdminPage>
-  );
-}

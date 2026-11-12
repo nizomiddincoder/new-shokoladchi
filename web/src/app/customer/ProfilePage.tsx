@@ -8,6 +8,7 @@ import type { Product } from '../../shared/types';
 import { Button, Card, Empty, Field, Segmented, useToast } from '../../shared/ui';
 import { phoneHref, prettyPhone } from '../../shared/format';
 import { setLanguage } from '../../shared/i18n';
+import { ThemeSwitchCard } from '../../shared/ThemeSwitch';
 import { PageHeader, Screen, TopTitle } from '../layout';
 import { useMe } from '../meContext';
 import { useShopSettings } from './hooks';
@@ -99,6 +100,8 @@ export function ProfilePage() {
             ]}
           />
         </Card>
+
+        <ThemeSwitchCard />
 
         <Card className="flex items-center justify-between p-4" onClick={() => navigate('/favorites')}>
           <div className="flex items-center gap-2.5 text-[15px] font-semibold">

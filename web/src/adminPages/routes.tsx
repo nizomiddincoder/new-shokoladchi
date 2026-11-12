@@ -3,7 +3,8 @@ import { BarChart3, Boxes, FileSpreadsheet, History, Image, LayoutDashboard, Meg
 import { DashboardPage } from './Dashboard';
 import { OrderPage, OrdersPage } from './Orders';
 import { CustomerPage, CustomersPage } from './Customers';
-import { CategoriesPage, ProductEditPage, ProductsPage } from './Products';
+import { ProductEditPage, ProductsPage } from './Products';
+import { CategoriesPage } from './Categories';
 import { WarehousePage } from './Warehouse';
 import { StaffPage } from './Staff';
 import { BannersPage, BroadcastPage } from './Marketing';

@@ -5,6 +5,7 @@ import { AdminCtx, AdminPage } from '../../adminPages/common';
 import { ADMIN_MENU, AdminRoutes } from '../../adminPages/routes';
 import { Card, Segmented } from '../../shared/ui';
 import { setLanguage } from '../../shared/i18n';
+import { ThemeSwitchCard } from '../../shared/ThemeSwitch';
 import { patch } from '../../shared/api';
 import { BottomNav } from '../layout';
 import { useMe } from '../meContext';
@@ -41,6 +42,9 @@ function MenuPage() {
           ]}
         />
       </Card>
+      <div className="mt-3">
+        <ThemeSwitchCard />
+      </div>
     </AdminPage>
   );
 }

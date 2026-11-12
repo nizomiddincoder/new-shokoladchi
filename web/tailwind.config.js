@@ -1,34 +1,42 @@
 /** @type {import('tailwindcss').Config} */
+
+// Ranglar styles.css dagi CSS o'zgaruvchilaridan olinadi (kun/tun rejimi shu orqali almashadi)
+const c = (name) => `rgb(var(--c-${name}) / <alpha-value>)`;
+
 export default {
   content: ['./app/index.html', './admin/index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        // styles.css dagi --primary va boshqa CSS o'zgaruvchilari bilan bir xil (opacity modifikatorlari ishlashi uchun hex)
         primary: {
-          DEFAULT: '#6F4E37',
-          dark: '#4A3224',
-          light: '#A47551',
-          soft: '#F3ECE6',
+          DEFAULT: c('primary'),
+          dark: c('primary-dark'),
+          light: c('primary-light'),
+          soft: c('primary-soft'),
         },
-        accent: '#D9A066',
-        bg: '#FFFFFF',
-        surface: '#FAF7F5',
-        ink: '#2B1D14',
-        muted: '#8C7B70',
-        line: '#EADFD7',
-        danger: '#C0392B',
-        success: '#2E7D32',
+        accent: c('accent'),
+        bg: c('bg'),
+        surface: c('surface'),
+        card: c('card'),
+        ink: c('ink'),
+        muted: c('muted'),
+        line: c('line'),
+        danger: { DEFAULT: c('danger'), soft: c('danger-soft') },
+        success: { DEFAULT: c('success'), soft: c('success-soft') },
+        warning: { DEFAULT: c('warning'), soft: c('warning-soft') },
+        info: { DEFAULT: c('info'), soft: c('info-soft') },
       },
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        // Matn: yumshoq, yumaloq Nunito; sarlavha va narxlar: shokolad butigi uslubidagi Playfair Display
+        sans: ['Nunito', 'system-ui', 'sans-serif'],
+        display: ['"Playfair Display"', 'Georgia', 'serif'],
       },
       borderRadius: {
         card: '16px',
       },
       boxShadow: {
-        card: '0 2px 12px rgba(74, 50, 36, 0.06)',
-        lift: '0 8px 24px rgba(74, 50, 36, 0.12)',
+        card: '0 2px 12px rgb(var(--c-shadow) / 0.08)',
+        lift: '0 8px 24px rgb(var(--c-shadow) / 0.16)',
       },
     },
   },

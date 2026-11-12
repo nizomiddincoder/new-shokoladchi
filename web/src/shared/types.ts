@@ -24,6 +24,8 @@ export type Category = {
   nameUz: string;
   nameRu: string;
   iconName: string;
+  imageUrl?: string | null;
+  imageStatus?: AiStatus;
   sortOrder: number;
   isActive: boolean;
   _count?: { products: number };
@@ -84,6 +86,7 @@ export type Banner = {
 
 export type PublicSettings = {
   shopName: string;
+  logoUrl: string | null;
   shopPhone: string;
   shopAddress: string;
   shopLat: number | null;

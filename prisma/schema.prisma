@@ -156,6 +156,9 @@ model Category {
   nameUz    String
   nameRu    String
   iconName  String    @default("ShoppingBasket")
+  /// Kategoriya rasmi (yuklangan yoki AI yaratgan); bo'lmasa ikonka ko'rsatiladi
+  imageUrl    String?
+  imageStatus AiStatus  @default(NONE)
   sortOrder Int       @default(0)
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
@@ -338,6 +341,7 @@ model Favorite {
 model Settings {
   id                   Int      @id @default(1)
   shopName             String   @default("Shokoladchi")
+  logoUrl              String?
   shopPhone            String   @default("")
   shopAddress          String   @default("")
   shopLat              Float?

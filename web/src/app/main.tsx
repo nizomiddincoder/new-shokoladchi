@@ -5,9 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '../shared/styles.css';
 import '../shared/i18n';
 import { initTelegram } from '../shared/telegram';
+import { applyTheme } from '../shared/theme';
 import { ToastProvider } from '../shared/ui';
 import { App } from './App';
 
+applyTheme();
 initTelegram();
 
 const queryClient = new QueryClient({

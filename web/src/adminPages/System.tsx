@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Download, FileSpreadsheet, History, Send, Sparkles } from 'lucide-react';
-import { get, post, put, qs } from '../shared/api';
+import { Download, FileSpreadsheet, History, ImagePlus, Send, Sparkles } from 'lucide-react';
+import { get, post, put, qs, upload } from '../shared/api';
+import { ShopLogo } from '../shared/branding';
 import type { AuditEntry, Paged, Settings } from '../shared/types';
 import { Badge, Button, Card, Empty, ErrorState, Field, PageLoader, Pager, Stat, useToast } from '../shared/ui';
 import { MapView } from '../shared/MapView';
@@ -22,6 +23,22 @@ export function SettingsPage() {
   const q = useQuery({ queryKey: ['admin-settings'], queryFn: () => get<SettingsResp>('/admin/settings') });
   const [s, setS] = useState<Settings | null>(null);
   const [busy, setBusy] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const logoRef = useRef<HTMLInputElement>(null);
+
+  const onLogo = async (f?: File) => {
+    if (!f) return;
+    setLogoBusy(true);
+    try {
+      const r = await upload<{ url: string }>('/admin/uploads?folder=branding', f);
+      setS((x) => (x ? { ...x, logoUrl: r.url } : x));
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setLogoBusy(false);
+      if (logoRef.current) logoRef.current.value = '';
+    }
+  };
   useEffect(() => {
     if (q.data) setS(q.data.settings);
   }, [q.data]);
@@ -34,6 +51,7 @@ export function SettingsPage() {
     try {
       await put('/admin/settings', {
         shopName: s.shopName,
+        logoUrl: s.logoUrl,
         shopPhone: s.shopPhone,
         shopAddress: s.shopAddress,
         shopLat: s.shopLat,
@@ -47,6 +65,8 @@ export function SettingsPage() {
       });
       toast.success(t('common.saved'));
       await qc.invalidateQueries({ queryKey: ['admin-settings'] });
+      await qc.invalidateQueries({ queryKey: ['branding'] });
+      await qc.invalidateQueries({ queryKey: ['home'] });
     } catch (e) {
       toast.error(e);
     } finally {
@@ -59,6 +79,22 @@ export function SettingsPage() {
     <AdminPage title={t('admin.settings')} actions={<Button size="sm" loading={busy} onClick={save}>{t('common.save')}</Button>}>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="space-y-3 p-4">
+          <Field label={t('admin.logo')} hint={t('admin.logoHint')}>
+            <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={(e) => onLogo(e.target.files?.[0])} />
+            <div className="flex items-center gap-3">
+              <ShopLogo url={s.logoUrl} className="h-20 w-20 border border-line" />
+              <div className="flex flex-col gap-2">
+                <Button type="button" size="sm" variant="secondary" icon={ImagePlus} loading={logoBusy} onClick={() => logoRef.current?.click()}>
+                  {t('admin.uploadLogo')}
+                </Button>
+                {s.logoUrl && (
+                  <Button type="button" size="sm" variant="ghost" className="text-danger" onClick={() => set('logoUrl', null)}>
+                    {t('admin.removeLogo')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Field>
           <Field label={t('admin.shopName')}>
             <input className="input" value={s.shopName} onChange={(e) => set('shopName', e.target.value)} />
           </Field>
@@ -107,7 +143,7 @@ export function SettingsPage() {
               </h3>
               <Badge tone="muted">{ai.model}</Badge>
             </div>
-            {!ai.enabled && <div className="mb-3 rounded-xl bg-[#FCF1E3] p-3 text-[13px] font-semibold text-[#A86A1E]">{t('admin.aiDisabled')}</div>}
+            {!ai.enabled && <div className="mb-3 rounded-xl bg-warning-soft p-3 text-[13px] font-semibold text-warning">{t('admin.aiDisabled')}</div>}
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               <Stat label={t('admin.aiCalls')} value={ai.total} />
               <Stat label={t('admin.aiSuccess')} value={ai.success} />
@@ -170,7 +206,7 @@ export function ExportPage() {
             {isWeb ? (
               <a
                 href={`/api/admin/export/${e.type}${e.type === 'orders' && from && to ? qs({ from, to }) : ''}`}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[14px] font-semibold text-white hover:bg-primary-dark"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-[14px] font-semibold text-white hover:brightness-110"
               >
                 <Download className="h-[18px] w-[18px]" /> {t('admin.download')}
               </a>

@@ -72,7 +72,7 @@ export function OrderTotals({ order }: { order: Order }) {
           <span>{order.deliveryFee ? money(order.deliveryFee) : t('cart.deliveryFree')}</span>
         </div>
       )}
-      <div className="flex justify-between pt-1 text-[16px] font-extrabold text-ink">
+      <div className="flex justify-between pt-1 font-display text-[18px] font-bold text-ink">
         <span>{t('common.total')}</span>
         <span className="text-primary">{money(order.finalTotal)}</span>
       </div>
@@ -122,7 +122,7 @@ export function OrderTimeline({ order }: { order: Order }) {
         return (
           <li key={s} className="relative flex gap-3 pb-4 last:pb-0">
             {i < steps.length - 1 && <span className={clsx('absolute left-[11px] top-6 h-[calc(100%-18px)] w-0.5', done && i < currentIdx ? 'bg-primary' : 'bg-line')} />}
-            <span className={clsx('z-[1] flex h-6 w-6 shrink-0 items-center justify-center rounded-full', done ? 'bg-primary text-white' : 'border-2 border-line bg-white')}>
+            <span className={clsx('z-[1] flex h-6 w-6 shrink-0 items-center justify-center rounded-full', done ? 'bg-primary text-white' : 'border-2 border-line bg-card')}>
               {done && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
             </span>
             <div className="-mt-0.5">

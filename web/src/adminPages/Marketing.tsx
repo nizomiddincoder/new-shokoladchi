@@ -48,7 +48,7 @@ function ImagePicker({ value, onChange, folder }: { value: string | null; onChan
       {value ? (
         <div className="relative overflow-hidden rounded-2xl border border-line">
           <img src={value} alt="" className="max-h-56 w-full object-cover" />
-          <button type="button" onClick={() => onChange(null)} className="absolute right-2 top-2 rounded-full bg-white/90 p-1.5 shadow" aria-label="remove">
+          <button type="button" onClick={() => onChange(null)} className="absolute right-2 top-2 rounded-full bg-card/90 p-1.5 shadow" aria-label="remove">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -193,7 +193,7 @@ function AiBannerBuilder({ value, onChange }: { value: string | null; onChange: 
           {sources.map((u) => (
             <div key={u} className="relative h-20 w-20 overflow-hidden rounded-xl border border-line">
               <img src={u} alt="" className="h-full w-full object-cover" />
-              <button type="button" onClick={() => setSources((s) => s.filter((x) => x !== u))} className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow" aria-label="remove">
+              <button type="button" onClick={() => setSources((s) => s.filter((x) => x !== u))} className="absolute right-1 top-1 rounded-full bg-card/90 p-1 shadow" aria-label="remove">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -305,7 +305,7 @@ export function BannersPage() {
                 </div>
               </div>
               <button className="rounded-lg p-1.5 text-primary hover:bg-surface" onClick={() => { setBannerMode('upload'); setForm({ ...b }); }} aria-label={t('common.edit')}><Pencil className="h-4 w-4" /></button>
-              <button className="rounded-lg p-1.5 text-danger hover:bg-[#FBEAE8]" onClick={() => setToDelete(b)} aria-label={t('common.delete')}><Trash2 className="h-4 w-4" /></button>
+              <button className="rounded-lg p-1.5 text-danger hover:bg-danger-soft" onClick={() => setToDelete(b)} aria-label={t('common.delete')}><Trash2 className="h-4 w-4" /></button>
             </div>
           </Card>
         ))}

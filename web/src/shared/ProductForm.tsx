@@ -114,7 +114,7 @@ function ImageCard({
           <button type="button" disabled={index === total - 1} onClick={() => onMove(1)} className="rounded-lg p-1.5 text-muted hover:bg-surface disabled:opacity-30" aria-label="right">
             <ChevronRight className="h-4 w-4" />
           </button>
-          <button type="button" onClick={onRemove} className="rounded-lg p-1.5 text-danger hover:bg-[#FBEAE8]" aria-label={t('pf.remove')}>
+          <button type="button" onClick={onRemove} className="rounded-lg p-1.5 text-danger hover:bg-danger-soft" aria-label={t('pf.remove')}>
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
@@ -385,7 +385,7 @@ export function ProductForm({ productId, onSaved, onCancel }: { productId?: numb
                 key={u}
                 type="button"
                 onClick={() => onUnit(u)}
-                className={clsx('rounded-xl border py-2 text-[13px] font-semibold', form.unit === u ? 'border-primary bg-primary text-white' : 'border-line bg-white text-ink')}
+                className={clsx('rounded-xl border py-2 text-[13px] font-semibold', form.unit === u ? 'border-primary bg-primary text-white' : 'border-line bg-card text-ink')}
               >
                 {t(`unit.${u}`)}
               </button>

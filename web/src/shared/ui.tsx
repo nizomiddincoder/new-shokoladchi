@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { AlertCircle, CheckCircle2, Info, Loader2, Minus, Plus, X, type LucideIcon } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Info, Loader2, Minus, Moon, Plus, Sun, X, type LucideIcon } from 'lucide-react';
+import { useTheme } from './theme';
 import { useTranslation } from 'react-i18next';
 import { haptic } from './telegram';
 import { ApiError } from './api';
@@ -30,9 +31,9 @@ export function Button({ variant = 'primary', size = 'md', loading, icon: Icon, 
         size === 'sm' && 'h-9 px-3 text-[13px]',
         size === 'md' && 'h-11 px-4 text-[14px]',
         size === 'lg' && 'h-[52px] px-5 text-[15px]',
-        variant === 'primary' && 'bg-primary text-white hover:bg-primary-dark',
-        variant === 'secondary' && 'bg-primary-soft text-primary-dark hover:bg-[#EADFD7]',
-        variant === 'outline' && 'border border-line bg-white text-ink hover:bg-surface',
+        variant === 'primary' && 'bg-primary text-white hover:brightness-110',
+        variant === 'secondary' && 'bg-primary-soft text-primary-dark hover:bg-line',
+        variant === 'outline' && 'border border-line bg-card text-ink hover:bg-surface',
         variant === 'ghost' && 'text-primary hover:bg-primary-soft',
         variant === 'danger' && 'bg-danger text-white hover:opacity-90',
         variant === 'success' && 'bg-success text-white hover:opacity-90',
@@ -63,6 +64,20 @@ export function IconButton({ icon: Icon, className, label, ...rest }: ButtonHTML
   );
 }
 
+/** Kun / tun rejimi tugmasi */
+export function ThemeToggle({ className }: { className?: string }) {
+  const { theme, toggle } = useTheme();
+  const { t } = useTranslation();
+  return (
+    <IconButton
+      icon={theme === 'dark' ? Sun : Moon}
+      label={theme === 'dark' ? t('theme.light') : t('theme.dark')}
+      onClick={toggle}
+      className={clsx('bg-primary-soft text-primary-dark', className)}
+    />
+  );
+}
+
 // ---------------- Form ----------------
 export function Field({ label, hint, error, children, className }: { label?: string; hint?: string; error?: string; children: ReactNode; className?: string }) {
   return (
@@ -86,7 +101,7 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
       className="flex items-center gap-3 text-left"
     >
       <span className={clsx('relative h-6 w-11 shrink-0 rounded-full transition', checked ? 'bg-primary' : 'bg-line')}>
-        <span className={clsx('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition', checked ? 'left-[22px]' : 'left-0.5')} />
+        <span className={clsx('absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition', checked ? 'left-[22px]' : 'left-0.5')} />
       </span>
       {label && <span className="text-sm font-medium text-ink">{label}</span>}
     </button>
@@ -102,11 +117,11 @@ export function Badge({ tone = 'soft', children, className }: { tone?: 'soft' | 
         tone === 'soft' && 'bg-primary-soft text-primary-dark',
         tone === 'accent' && 'bg-accent text-white',
         tone === 'primary' && 'bg-primary text-white',
-        tone === 'danger' && 'bg-[#FBEAE8] text-danger',
-        tone === 'success' && 'bg-[#E8F3E9] text-success',
+        tone === 'danger' && 'bg-danger-soft text-danger',
+        tone === 'success' && 'bg-success-soft text-success',
         tone === 'muted' && 'bg-surface text-muted',
-        tone === 'warning' && 'bg-[#FCF1E3] text-[#A86A1E]',
-        tone === 'info' && 'bg-[#EAF1FB] text-[#2F5E9E]',
+        tone === 'warning' && 'bg-warning-soft text-warning',
+        tone === 'info' && 'bg-info-soft text-info',
         className,
       )}
     >
@@ -137,7 +152,7 @@ export function Empty({ icon: Icon, title, text, action }: { icon: LucideIcon; t
       <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary-soft">
         <Icon className="h-9 w-9 text-primary" strokeWidth={1.8} />
       </div>
-      <h3 className="text-[17px] font-bold text-ink">{title}</h3>
+      <h3 className="font-display text-[19px] font-bold text-ink">{title}</h3>
       {text && <p className="mt-1.5 max-w-xs text-sm text-muted">{text}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
@@ -167,7 +182,7 @@ export function Card({ children, className, onClick }: { children: ReactNode; cl
 export function SectionTitle({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-[17px] font-bold text-ink">{title}</h2>
+      <h2 className="font-display text-[19px] font-bold text-ink">{title}</h2>
       {action}
     </div>
   );
@@ -180,7 +195,7 @@ export function Stat({ label, value, icon: Icon, tone }: { label: string; value:
         {Icon && <Icon className={clsx('h-4 w-4', tone === 'danger' ? 'text-danger' : 'text-primary-light')} />}
         {label}
       </div>
-      <div className={clsx('mt-1.5 text-[20px] font-extrabold tracking-tight', tone === 'danger' ? 'text-danger' : 'text-primary-dark')}>{value}</div>
+      <div className={clsx('mt-1.5 font-display text-[21px] font-bold', tone === 'danger' ? 'text-danger' : 'text-primary-dark')}>{value}</div>
     </div>
   );
 }
@@ -218,7 +233,7 @@ export function Segmented<T extends string>({ value, onChange, items }: { value:
           }}
           className={clsx(
             'flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-[14px] font-semibold transition',
-            value === it.value ? 'bg-white text-primary-dark shadow-card' : 'text-muted',
+            value === it.value ? 'bg-card text-primary-dark shadow-card' : 'text-muted',
           )}
         >
           {it.icon && <it.icon className="h-4 w-4" />}
@@ -273,11 +288,11 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        className={clsx('sheet-in flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-white shadow-lift sm:rounded-3xl', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}
+        className={clsx('sheet-in flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-card shadow-lift sm:rounded-3xl', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-          <h3 className="text-[16px] font-bold text-ink">{title}</h3>
+          <h3 className="font-display text-[18px] font-bold text-ink">{title}</h3>
           <IconButton icon={X} label="close" onClick={onClose} className="-mr-2 h-9 w-9" />
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
@@ -358,7 +373,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               key={it.id}
               className={clsx(
                 'fade-in pointer-events-auto flex max-w-md items-start gap-2.5 rounded-2xl px-4 py-3 text-[14px] font-semibold shadow-lift',
-                it.kind === 'error' ? 'bg-danger text-white' : it.kind === 'success' ? 'bg-primary-dark text-white' : 'bg-white text-ink',
+                it.kind === 'error' ? 'bg-danger text-white' : it.kind === 'success' ? 'bg-ink text-bg' : 'bg-card text-ink',
               )}
             >
               <Icon className="mt-0.5 h-[18px] w-[18px] shrink-0" />

@@ -70,7 +70,7 @@ export function CartPage() {
                 {!it.available && <div className="text-[12px] font-semibold text-danger">{t('cart.unavailable')}</div>}
                 <div className="mt-auto flex items-center justify-between pt-1.5">
                   <Stepper size="sm" value={it.qty} step={it.product.step} min={it.product.minQty} max={it.product.stock} suffix={unitLabel(it.product.unit)} onChange={(v) => void cart.setQty(it.productId, v)} />
-                  <div className="text-right text-[15px] font-extrabold text-primary">{money(it.lineTotal)}</div>
+                  <div className="text-right font-display text-[17px] font-bold text-primary">{money(it.lineTotal)}</div>
                 </div>
               </div>
             </Card>
@@ -91,7 +91,7 @@ export function CartPage() {
           </Card>
 
           {minLeft > 0 && s && (
-            <div className="flex gap-2.5 rounded-2xl bg-[#FCF1E3] p-3 text-[13px] font-semibold text-[#A86A1E]">
+            <div className="flex gap-2.5 rounded-2xl bg-warning-soft p-3 text-[13px] font-semibold text-warning">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               {t('cart.minOrder', { sum: money(s.minOrderAmount), left: money(minLeft) })}
             </div>

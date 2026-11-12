@@ -10,10 +10,11 @@ import { audit } from '../lib/audit';
 import { imageUpload } from '../lib/upload';
 import { escapeHtml, toNum } from '../lib/format';
 import { STAFF_ORDER_INCLUDE, staffOrderDto } from './staff';
-import { saveImage, type Folder } from '../services/storage';
+import { removeUpload, saveImage, type Folder } from '../services/storage';
 import { dashboardStats, resolveRange } from '../services/stats';
 import { buildExport, type ExportType } from '../services/export';
-import { aiEnabled, aiMonthlyStats, generateBanner } from '../services/ai';
+import { aiEnabled, aiMonthlyStats, enqueueCategoryImage, generateBanner } from '../services/ai';
+import { guessCategoryIcon } from '../lib/categoryIcon';
 import { enqueueTranslation } from '../services/translate';
 import { runBroadcasts, segmentWhere } from '../services/broadcast';
 import { bot, safeCall } from '../bot/instance';
@@ -198,7 +199,10 @@ const categoryBody = z.object({
   nameUz: z.string().trim().min(1).max(100),
   // Ixtiyoriy: yuborilmasa avtomatik tarjima qilinadi
   nameRu: z.string().trim().max(100).optional(),
-  iconName: z.string().trim().min(1).max(50).default('ShoppingBasket'),
+  // 'auto' yoki yuborilmasa — nomga qarab avtomatik tanlanadi
+  iconName: z.string().trim().min(1).max(50).optional(),
+  // Yuklangan rasm; null/yo'q bo'lsa AI nomiga mos rasm yaratadi
+  imageUrl: z.string().startsWith('/uploads/').nullable().optional(),
   sortOrder: z.number().int().default(0),
   isActive: z.boolean().default(true),
 });
@@ -219,8 +223,13 @@ adminRouter.post(
   ah(async (req, res) => {
     const data = categoryBody.parse(req.body);
     const auto = !data.nameRu;
-    const c = await prisma.category.create({ data: { ...data, nameRu: data.nameRu || data.nameUz } });
+    const iconName = !data.iconName || data.iconName === 'auto' ? guessCategoryIcon(data.nameUz) : data.iconName;
+    let c = await prisma.category.create({
+      data: { ...data, iconName, imageUrl: data.imageUrl || null, nameRu: data.nameRu || data.nameUz },
+    });
     if (auto) enqueueTranslation('category', c.id);
+    // Rasm yuklanmagan bo'lsa — AI nomiga mos rasm yaratadi
+    if (!c.imageUrl && (await enqueueCategoryImage(c.id))) c = { ...c, imageStatus: 'PENDING' };
     await audit(req.actor!, 'category.create', 'Category', c.id, null, data);
     res.status(201).json(c);
   }),
@@ -236,10 +245,31 @@ adminRouter.patch(
     const auto = !data.nameRu && !!data.nameUz && data.nameUz !== before.nameUz;
     if (!data.nameRu) delete data.nameRu;
     if (auto && !aiEnabled()) data.nameRu = data.nameUz;
-    const c = await prisma.category.update({ where: { id }, data });
+    if (data.iconName === 'auto') data.iconName = guessCategoryIcon(data.nameUz ?? before.nameUz);
+    const imageChanged = data.imageUrl !== undefined && data.imageUrl !== before.imageUrl;
+    const update: Prisma.CategoryUpdateInput = { ...data };
+    // Qo'lda yuklangan rasm AI jarayonini to'xtatadi
+    if (imageChanged && data.imageUrl) update.imageStatus = 'NONE';
+    let c = await prisma.category.update({ where: { id }, data: update });
     if (auto) enqueueTranslation('category', id);
+    if (imageChanged && before.imageUrl?.startsWith('/uploads/categories/')) await removeUpload(before.imageUrl);
+    // Rasm olib tashlansa — AI nomga mos yangisini yaratadi
+    if (imageChanged && !data.imageUrl && (await enqueueCategoryImage(id))) c = { ...c, imageStatus: 'PENDING' };
     await audit(req.actor!, 'category.update', 'Category', id, before, data);
     res.json(c);
+  }),
+);
+
+/** Kategoriya rasmini AI bilan (qayta) yaratish */
+adminRouter.post(
+  '/categories/:id/ai-image',
+  ah(async (req, res) => {
+    const id = Number(req.params.id);
+    const c = await prisma.category.findUnique({ where: { id } });
+    if (!c) throw notFound();
+    if (!(await enqueueCategoryImage(id))) throw badRequest('AI_DISABLED', 'AI o\'chirilgan: GEMINI_API_KEY o\'rnatilmagan');
+    await audit(req.actor!, 'category.ai_image', 'Category', id);
+    res.json({ ok: true, imageStatus: 'PENDING' });
   }),
 );
 
@@ -586,6 +616,7 @@ adminRouter.put(
     const data = z
       .object({
         shopName: z.string().trim().min(1).max(100),
+        logoUrl: z.string().startsWith('/uploads/').nullable().optional(),
         shopPhone: z.string().trim().max(30),
         shopAddress: z.string().trim().max(300),
         shopLat: z.number().min(-90).max(90).nullable(),
@@ -611,8 +642,8 @@ adminRouter.post(
   imageUpload.single('file'),
   ah(async (req, res) => {
     if (!req.file) throw badRequest('NO_FILE', 'Rasm tanlanmagan');
-    const folder = z.enum(['banners', 'broadcasts']).default('banners').parse(req.query.folder) as Folder;
-    const saved = await saveImage(req.file.buffer, folder);
+    const folder = z.enum(['banners', 'broadcasts', 'categories', 'branding']).default('banners').parse(req.query.folder) as Folder;
+    const saved = await saveImage(req.file.buffer, folder, folder === 'branding' ? { maxSize: 512, quality: 92 } : folder === 'categories' ? { maxSize: 600 } : {});
     res.status(201).json({ url: saved.url, thumbUrl: saved.thumbUrl });
   }),
 );

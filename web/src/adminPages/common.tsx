@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Tabs } from '../shared/ui';
+import { Tabs, ThemeToggle } from '../shared/ui';
 import { isTelegram, useBackButton } from '../shared/telegram';
 import { todayISO } from '../shared/format';
 
@@ -36,7 +36,7 @@ export function AdminPage({ title, actions, children, root }: { title: ReactNode
                 <ChevronLeft className="h-5 w-5" />
               </button>
             )}
-            <h1 className="text-[24px] font-extrabold tracking-tight text-ink">{title}</h1>
+            <h1 className="font-display text-[28px] font-bold text-ink">{title}</h1>
           </div>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </div>
@@ -46,14 +46,15 @@ export function AdminPage({ title, actions, children, root }: { title: ReactNode
   }
   return (
     <div className="fade-in mx-auto max-w-xl" style={{ paddingBottom: 'calc(var(--safe-bottom) + 90px)' }}>
-      <header className="sticky top-0 z-30 flex min-h-14 items-center gap-2 border-b border-line/60 bg-white/95 px-3 py-2 backdrop-blur">
+      <header className="sticky top-0 z-30 flex min-h-14 items-center gap-2 border-b border-line/60 bg-card/95 px-3 py-2 backdrop-blur">
         {!root && !isTelegram && (
           <button onClick={goBack} className="-ml-1 flex h-10 w-10 items-center justify-center rounded-full hover:bg-primary-soft" aria-label="back">
             <ChevronLeft className="h-6 w-6" />
           </button>
         )}
-        <h1 className="min-w-0 flex-1 truncate px-1 text-[17px] font-bold">{title}</h1>
+        <h1 className="min-w-0 flex-1 truncate px-1 font-display text-[19px] font-bold">{title}</h1>
         {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+        {root && <ThemeToggle className="h-9 w-9" />}
       </header>
       <div className="px-4 pt-3">{children}</div>
     </div>
@@ -88,5 +89,5 @@ export function RangePicker({ value, onChange }: { value: RangeValue; onChange: 
 }
 
 export function TableWrap({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto rounded-2xl bg-white shadow-card">{children}</div>;
+  return <div className="overflow-x-auto rounded-2xl bg-card shadow-card">{children}</div>;
 }

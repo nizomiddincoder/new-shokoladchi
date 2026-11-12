@@ -108,7 +108,7 @@ export function CheckoutPage() {
       <PageHeader title={t('checkout.title')} />
       <div className="space-y-3 px-4 pt-3">
         {closed && s && (
-          <div className="flex gap-2.5 rounded-2xl bg-[#FBEAE8] p-3 text-[13px] font-semibold text-danger">
+          <div className="flex gap-2.5 rounded-2xl bg-danger-soft p-3 text-[13px] font-semibold text-danger">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             {t('checkout.closedNow', { start: s.workHoursStart, end: s.workHoursEnd })}
           </div>
@@ -130,7 +130,7 @@ export function CheckoutPage() {
               {loc ? t('checkout.locationReceived') : t('checkout.sendLocation')}
             </Button>
             {locDenied && (
-              <div className="flex items-start gap-2 rounded-xl bg-[#FCF1E3] p-3 text-[12.5px] font-medium text-[#A86A1E]">
+              <div className="flex items-start gap-2 rounded-xl bg-warning-soft p-3 text-[12.5px] font-medium text-warning">
                 <Info className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
                   {t('checkout.locationDenied')}
