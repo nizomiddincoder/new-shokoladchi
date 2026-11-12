@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Clock, Search } from 'lucide-react';
+import { Camera, Clock, Gift, Search } from 'lucide-react';
 import { get } from '../../shared/api';
 import type { Banner, Category, Product, PublicSettings } from '../../shared/types';
 import { ErrorState, SectionTitle, Skeleton, ThemeToggle } from '../../shared/ui';
@@ -12,7 +12,7 @@ import { useBackButton } from '../../shared/telegram';
 import { Screen } from '../layout';
 import { ProductCard, ProductGrid, ProductGridSkeleton } from './ProductCard';
 
-type Home = { banners: Banner[]; categories: Category[]; discounted: Product[]; bestsellers: Product[]; newest: Product[]; settings: PublicSettings };
+type Home = { banners: Banner[]; categories: Category[]; discounted: Product[]; bestsellers: Product[]; newest: Product[]; settings: PublicSettings; personalCount: number };
 
 export function HomePage() {
   const { t, i18n } = useTranslation();
@@ -49,6 +49,30 @@ export function HomePage() {
       </div>
 
       {q.error && <ErrorState error={q.error} onRetry={() => q.refetch()} />}
+
+      {/* "Mening shokoladim" — maxsus, ajralib turadigan tugma */}
+      {!!d?.personalCount && (
+        <div className="px-4 pt-4">
+          <button
+            onClick={() => navigate('/personal')}
+            className="relative flex w-full items-center gap-3.5 overflow-hidden rounded-3xl bg-gradient-to-r from-[#4A3224] via-[#6F4E37] to-[#C98E55] p-4 text-left text-white shadow-lift active:scale-[0.99]"
+          >
+            <span className="absolute -right-6 -top-8 h-28 w-28 rounded-full bg-white/10" />
+            <span className="absolute -bottom-10 right-10 h-20 w-20 rounded-full bg-white/10" />
+            <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/20">
+              <Gift className="h-7 w-7" />
+            </span>
+            <span className="relative min-w-0 flex-1">
+              <span className="flex items-center gap-2">
+                <span className="font-display text-[20px] font-bold leading-tight">{t('personal.title')}</span>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase text-primary">{t('shop.new')}</span>
+              </span>
+              <span className="mt-0.5 block text-[12.5px] leading-snug opacity-90">{t('personal.homeText')}</span>
+            </span>
+            <Camera className="relative h-6 w-6 shrink-0 opacity-90" />
+          </button>
+        </div>
+      )}
 
       {/* Bannerlar */}
       <div className="no-scrollbar mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4">

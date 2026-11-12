@@ -66,7 +66,26 @@ catalogRouter.get(
       bestsellers: bestsellers.map((p) => productDto(p)),
       newest: newest.map((p) => productDto(p)),
       settings: publicSettings(settings),
+      // Bosh sahifadagi "Mening shokoladim" tugmasi faqat shablon bo'lsa ko'rinadi
+      personalCount: await prisma.personalTemplate.count({ where: { isActive: true, product: { isActive: true } } }),
     });
+  }),
+);
+
+/** "Mening shokoladim" shablonlari (faol mahsulot bilan bog'langanlari) */
+export async function activeTemplates() {
+  const list = await prisma.personalTemplate.findMany({
+    where: { isActive: true, product: { isActive: true } },
+    include: { product: { include: PRODUCT_INCLUDE } },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+  });
+  return list.map(({ product, ...t }) => ({ ...t, product: productDto(product) }));
+}
+
+catalogRouter.get(
+  '/personal-templates',
+  ah(async (_req, res) => {
+    res.json(await activeTemplates());
   }),
 );
 

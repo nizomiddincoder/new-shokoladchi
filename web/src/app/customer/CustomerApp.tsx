@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { PersonalPage, type PersonalCheckoutState } from './PersonalPage';
 import { useTranslation } from 'react-i18next';
 import { House, LayoutGrid, ReceiptText, ShoppingCart, UserRound } from 'lucide-react';
 import { BottomNav } from '../layout';
@@ -10,6 +11,14 @@ import { CartPage } from './CartPage';
 import { CheckoutPage } from './CheckoutPage';
 import { OrderDetailPage, OrdersPage } from './OrdersPage';
 import { FavoritesPage, ProfilePage } from './ProfilePage';
+
+/** Dizayn tayyor bo'lmasa (masalan sahifa yangilansa) muharrirga qaytaradi */
+function PersonalCheckoutRoute() {
+  const location = useLocation();
+  const state = location.state as PersonalCheckoutState | null;
+  if (!state?.designUrl) return <Navigate to="/personal" replace />;
+  return <CheckoutPage personal={state} />;
+}
 
 export function CustomerApp() {
   const { t } = useTranslation();
@@ -23,6 +32,8 @@ export function CustomerApp() {
         <Route path="/product/:id" element={<ProductPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/personal" element={<PersonalPage />} />
+        <Route path="/personal/checkout" element={<PersonalCheckoutRoute />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/profile" element={<ProfilePage />} />

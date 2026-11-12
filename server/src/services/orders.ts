@@ -1,4 +1,6 @@
-import type { DeliveryType, OrderStatus, Prisma, Role, User } from '@prisma/client';
+import fs from 'node:fs';
+import type { DeliveryType, OrderStatus, Prisma, Product, Role, User } from '@prisma/client';
+import { urlToPath } from './storage';
 import { prisma, getSettings } from '../db';
 import { logger } from '../logger';
 import { HttpError, badRequest, conflict, forbidden, notFound } from '../lib/errors';
@@ -59,7 +61,73 @@ export type CreateOrderInput = {
   lat?: number | null;
   lng?: number | null;
   comment?: string;
+  /** "Mening shokoladim": savatcha o'rniga bitta shaxsiy dizaynli qator */
+  personal?: { templateId: number; designUrl: string; qty: number };
 };
+
+type OrderLine = {
+  productId: number;
+  nameSnapshot: string;
+  nameRuSnapshot: string;
+  unit: Product['unit'];
+  qty: number;
+  priceSnapshot: number;
+  lineTotal: number;
+  designUrl?: string;
+  templateId?: number;
+};
+
+async function cartLines(customer: User): Promise<OrderLine[]> {
+  const cart = await prisma.cartItem.findMany({
+    where: { userId: customer.id },
+    include: { product: true },
+    orderBy: { id: 'asc' },
+  });
+  if (!cart.length) throw badRequest('CART_EMPTY', 'Savatcha bo\'sh');
+  const invalid: { productId: number; name: string; reason: string }[] = [];
+  for (const c of cart) {
+    const p = c.product;
+    if (!p.isActive) invalid.push({ productId: p.id, name: p.nameUz, reason: 'INACTIVE' });
+    else if (!validateQty(toNum(c.qty), toNum(p.step), toNum(p.minQty)))
+      invalid.push({ productId: p.id, name: p.nameUz, reason: 'BAD_QTY' });
+  }
+  if (invalid.length) throw badRequest('CART_INVALID', 'Savatchadagi ba\'zi mahsulotlar mavjud emas', { items: invalid });
+  return cart.map((c) => {
+    const qty = round3(toNum(c.qty));
+    return {
+      productId: c.productId,
+      nameSnapshot: c.product.nameUz,
+      nameRuSnapshot: c.product.nameRu,
+      unit: c.product.unit,
+      qty,
+      priceSnapshot: c.product.price,
+      lineTotal: lineTotal(qty, c.product.price),
+    };
+  });
+}
+
+async function personalLines(p: NonNullable<CreateOrderInput['personal']>): Promise<OrderLine[]> {
+  const tpl = await prisma.personalTemplate.findFirst({ where: { id: p.templateId, isActive: true }, include: { product: true } });
+  if (!tpl || !tpl.product.isActive) throw badRequest('TEMPLATE_UNAVAILABLE', 'Bu shablon hozir mavjud emas');
+  const designPath = /^\/uploads\/designs\/[\w-]+\.jpg$/.test(p.designUrl) ? urlToPath(p.designUrl) : null;
+  if (!designPath || !fs.existsSync(designPath)) throw badRequest('BAD_DESIGN', 'Dizayn rasmi topilmadi, qaytadan tayyorlang');
+  const product = tpl.product;
+  const qty = round3(p.qty);
+  if (!validateQty(qty, toNum(product.step), toNum(product.minQty))) throw badRequest('BAD_QTY', 'Miqdor noto\'g\'ri');
+  return [
+    {
+      productId: product.id,
+      nameSnapshot: `${product.nameUz} (shaxsiy rasm)`,
+      nameRuSnapshot: `${product.nameRu} (с вашим фото)`,
+      unit: product.unit,
+      qty,
+      priceSnapshot: product.price,
+      lineTotal: lineTotal(qty, product.price),
+      designUrl: p.designUrl,
+      templateId: tpl.id,
+    },
+  ];
+}
 
 export async function createOrder(customer: User, input: CreateOrderInput) {
   const settings = await getSettings();
@@ -74,36 +142,11 @@ export async function createOrder(customer: User, input: CreateOrderInput) {
     throw badRequest('ADDRESS_REQUIRED', 'Yetkazish uchun joylashuv yoki manzil kerak');
   }
 
-  const cart = await prisma.cartItem.findMany({
-    where: { userId: customer.id },
-    include: { product: true },
-    orderBy: { id: 'asc' },
-  });
-  if (!cart.length) throw badRequest('CART_EMPTY', 'Savatcha bo\'sh');
-
-  const invalid: { productId: number; name: string; reason: string }[] = [];
-  for (const c of cart) {
-    const p = c.product;
-    if (!p.isActive) invalid.push({ productId: p.id, name: p.nameUz, reason: 'INACTIVE' });
-    else if (!validateQty(toNum(c.qty), toNum(p.step), toNum(p.minQty)))
-      invalid.push({ productId: p.id, name: p.nameUz, reason: 'BAD_QTY' });
-  }
-  if (invalid.length) throw badRequest('CART_INVALID', 'Savatchadagi ba\'zi mahsulotlar mavjud emas', { items: invalid });
-
-  const lines = cart.map((c) => {
-    const qty = round3(toNum(c.qty));
-    return {
-      productId: c.productId,
-      nameSnapshot: c.product.nameUz,
-      nameRuSnapshot: c.product.nameRu,
-      unit: c.product.unit,
-      qty,
-      priceSnapshot: c.product.price,
-      lineTotal: lineTotal(qty, c.product.price),
-    };
-  });
+  const isPersonal = !!input.personal;
+  const lines = isPersonal ? await personalLines(input.personal!) : await cartLines(customer);
   const itemsTotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  if (itemsTotal < settings.minOrderAmount) {
+  // Maxsus (shaxsiy rasmli) buyurtmaga minimal summa talabi qo'llanmaydi
+  if (!isPersonal && itemsTotal < settings.minOrderAmount) {
     throw badRequest('MIN_ORDER', 'Minimal buyurtma summasi yetarli emas', { minOrderAmount: settings.minOrderAmount, itemsTotal });
   }
   const deliveryFee =
@@ -136,6 +179,7 @@ export async function createOrder(customer: User, input: CreateOrderInput) {
     const created = await tx.order.create({
       data: {
         customerId: customer.id,
+        isPersonal,
         deliveryType: input.deliveryType,
         address: input.deliveryType === 'DELIVERY' ? (input.address || '').trim() : '',
         lat: input.deliveryType === 'DELIVERY' ? input.lat ?? null : null,
@@ -164,7 +208,7 @@ export async function createOrder(customer: User, input: CreateOrderInput) {
         },
       });
     }
-    await tx.cartItem.deleteMany({ where: { userId: customer.id } });
+    if (!isPersonal) await tx.cartItem.deleteMany({ where: { userId: customer.id } });
     return created;
   });
 

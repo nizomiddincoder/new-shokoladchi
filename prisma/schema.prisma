@@ -193,6 +193,7 @@ model Product {
   images            ProductImage[]
   stockMovements    StockMovement[]
   orderItems        OrderItem[]
+  personalTemplates PersonalTemplate[]
   cartItems         CartItem[]
   favorites         Favorite[]
 
@@ -258,6 +259,8 @@ model Order {
   customer          User         @relation("CustomerOrders", fields: [customerId], references: [id])
   status            OrderStatus  @default(NEW)
   deliveryType      DeliveryType
+  /// Maxsus (shaxsiy rasmli) buyurtma
+  isPersonal        Boolean      @default(false)
   address           String       @default("")
   lat               Float?
   lng               Float?
@@ -309,6 +312,9 @@ model OrderItem {
   priceSnapshot Int
   finalQty      Decimal? @db.Decimal(10, 3)
   lineTotal     Int
+  /// "Mening shokoladim": mijoz rasmi qo'yilgan tayyor dizayn (JPG)
+  designUrl     String?
+  templateId    Int?
 
   @@index([orderId])
   @@index([productId])
@@ -353,6 +359,26 @@ model Settings {
   minOrderAmount       Int      @default(50000)
   acceptTimeoutMinutes Int      @default(10)
   updatedAt            DateTime @updatedAt
+}
+
+/// "Mening shokoladim" shabloni: qadoq rasmi + mijoz rasmi qo'yiladigan joy (foizda)
+model PersonalTemplate {
+  id        Int      @id @default(autoincrement())
+  titleUz   String
+  titleRu   String   @default("")
+  imageUrl  String
+  width     Int
+  height    Int
+  areaX     Float    @default(0.67)
+  areaY     Float    @default(0.05)
+  areaW     Float    @default(0.31)
+  areaH     Float    @default(0.45)
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Banner {

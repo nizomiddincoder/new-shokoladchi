@@ -12,8 +12,10 @@ import { isTelegram, openLocationSettings, requestLocation, useMainButton } from
 import { PageHeader } from '../layout';
 import { useMe } from '../meContext';
 import { useCart, useShopSettings } from './hooks';
+import type { PersonalCheckoutState } from './PersonalPage';
 
-export function CheckoutPage() {
+/** personal berilsa — "Mening shokoladim" buyurtmasi (savatcha emas) */
+export function CheckoutPage({ personal }: { personal?: PersonalCheckoutState }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const toast = useToast();
@@ -32,12 +34,12 @@ export function CheckoutPage() {
   const locationRef = useRef<HTMLDivElement>(null);
 
   const s = settings.data;
-  const itemsTotal = cart.total;
+  const itemsTotal = personal ? Math.round(personal.qty * personal.price) : cart.total;
   const deliveryFee = type === 'DELIVERY' && s ? (s.freeDeliveryFrom > 0 && itemsTotal >= s.freeDeliveryFrom ? 0 : s.deliveryFee) : 0;
   const total = itemsTotal + deliveryFee;
   const closed = s ? !s.isOpen : false;
   const needLoc = type === 'DELIVERY' && !loc && !address.trim();
-  const approx = cart.items.some((i) => isWeighted(i.product.unit));
+  const approx = !personal && cart.items.some((i) => isWeighted(i.product.unit));
 
   /**
    * Buyurtma berib bo'lmasligi sababi (bo'lsa). Tugma o'chirib qo'yilmaydi —
@@ -46,7 +48,7 @@ export function CheckoutPage() {
   const problem = (): string | null => {
     if (!s) return t('common.loading');
     if (closed) return t('checkout.closedNow', { start: s.workHoursStart, end: s.workHoursEnd });
-    if (itemsTotal < s.minOrderAmount) return t('cart.minOrder', { sum: money(s.minOrderAmount), left: money(s.minOrderAmount - itemsTotal) });
+    if (!personal && itemsTotal < s.minOrderAmount) return t('cart.minOrder', { sum: money(s.minOrderAmount), left: money(s.minOrderAmount - itemsTotal) });
     if (needLoc) return t('checkout.needLocation');
     return null;
   };
@@ -67,7 +69,7 @@ export function CheckoutPage() {
   };
 
   const submit = async () => {
-    if (sending || !cart.count) return;
+    if (sending || (!personal && !cart.count)) return;
     const p = problem();
     if (p) {
       toast.error(new Error(p));
@@ -79,7 +81,8 @@ export function CheckoutPage() {
     }
     setSending(true);
     try {
-      const res = await post<{ id: number; number: number }>('/shop/orders', {
+      const res = await post<{ id: number; number: number }>(personal ? '/shop/personal-orders' : '/shop/orders', {
+        ...(personal ? { templateId: personal.templateId, designUrl: personal.designUrl, qty: personal.qty } : {}),
         deliveryType: type,
         address: type === 'DELIVERY' ? address : undefined,
         lat: type === 'DELIVERY' ? loc?.lat ?? null : null,
@@ -98,10 +101,10 @@ export function CheckoutPage() {
     }
   };
 
-  useMainButton({ text: `${t('checkout.placeOrder')} · ${money(total)}`, onClick: submit, disabled: sending, loading: sending, visible: cart.count > 0 });
+  useMainButton({ text: `${t('checkout.placeOrder')} · ${money(total)}`, onClick: submit, disabled: sending, loading: sending, visible: !!personal || cart.count > 0 });
 
-  if (settings.isLoading || cart.isLoading) return <PageLoader />;
-  if (!cart.count && !sending) return <Navigate to="/cart" replace />;
+  if (settings.isLoading || (!personal && cart.isLoading)) return <PageLoader />;
+  if (!personal && !cart.count && !sending) return <Navigate to="/cart" replace />;
 
   return (
     <div className="fade-in mx-auto max-w-xl" style={{ paddingBottom: 'calc(var(--safe-bottom) + 32px)' }}>
@@ -178,8 +181,19 @@ export function CheckoutPage() {
 
         <Card className="p-4">
           <h3 className="mb-2 text-[15px] font-bold">{t('checkout.summary')}</h3>
+          {personal && (
+            <div className="mb-2 space-y-2">
+              <img src={personal.previewUrl} alt="" className="w-full rounded-xl border border-line" />
+              <div className="flex justify-between gap-2 text-[13.5px]">
+                <span className="min-w-0 truncate text-ink">
+                  {personal.title} <span className="text-muted">· {fq(personal.qty)} {unitLabel(personal.unit)}</span>
+                </span>
+                <span className="shrink-0 font-semibold">{money(itemsTotal)}</span>
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5 text-[13.5px]">
-            {cart.items.map((i) => (
+            {!personal && cart.items.map((i) => (
               <div key={i.productId} className="flex justify-between gap-2">
                 <span className="min-w-0 truncate text-ink">
                   {nameOf(i.product)} <span className="text-muted">· {fq(i.qty)} {unitLabel(i.product.unit)}</span>

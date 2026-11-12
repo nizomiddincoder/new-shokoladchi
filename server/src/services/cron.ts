@@ -1,4 +1,7 @@
 import cron from 'node-cron';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { env } from '../env';
 import { prisma, getSettings } from '../db';
 import { logger } from '../logger';
 import { ORDER_FULL, sendLowStockReport, sendTimeoutWarning } from '../bot/notify';
@@ -35,6 +38,25 @@ async function cleanupOrphanImages() {
   if (orphans.length) logger.info({ count: orphans.length }, 'Ishlatilmagan rasmlar tozalandi');
 }
 
+/** Buyurtmaga aylanmagan (2 kundan eski) "Mening shokoladim" dizaynlarini o'chiradi */
+async function cleanupOrphanDesigns() {
+  const dir = path.join(env.UPLOAD_DIR, 'designs');
+  const files = await fs.readdir(dir).catch(() => [] as string[]);
+  const border = Date.now() - 2 * 24 * 3600 * 1000;
+  let removed = 0;
+  for (const f of files) {
+    const full = path.join(dir, f);
+    const st = await fs.stat(full).catch(() => null);
+    if (!st || st.mtimeMs > border) continue;
+    const used = await prisma.orderItem.count({ where: { designUrl: `/uploads/designs/${f}` } });
+    if (!used) {
+      await fs.rm(full, { force: true });
+      removed++;
+    }
+  }
+  if (removed) logger.info({ removed }, 'Ishlatilmagan dizaynlar tozalandi');
+}
+
 export function startCron() {
   const tz = 'Asia/Tashkent';
   cron.schedule(
@@ -56,6 +78,7 @@ export function startCron() {
     '30 3 * * *',
     () => {
       cleanupOrphanImages().catch((err) => logger.error({ err }, 'Rasm tozalashda xato'));
+      cleanupOrphanDesigns().catch((err) => logger.error({ err }, 'Dizayn tozalashda xato'));
     },
     { timezone: tz },
   );

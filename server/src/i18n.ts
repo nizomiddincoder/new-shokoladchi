@@ -98,6 +98,8 @@ const uz = {
   seller: 'Sotuvchi',
   cancelled_by: 'Bekor qildi',
   export_ready: 'Eksport fayli: {{name}}',
+  personal_badge: 'MAXSUS BUYURTMA — mijozning shaxsiy rasmi bilan',
+  personal_file_caption: '<b>#{{number}}</b> — maxsus dizayn ({{qty}} {{unit}}). Chop etish uchun asl sifatdagi JPG.',
 };
 
 const ru: typeof uz = {
@@ -195,6 +197,8 @@ const ru: typeof uz = {
   seller: 'Продавец',
   cancelled_by: 'Отменил',
   export_ready: 'Файл экспорта: {{name}}',
+  personal_badge: 'ОСОБЫЙ ЗАКАЗ — с личным фото клиента',
+  personal_file_caption: '<b>#{{number}}</b> — личный дизайн ({{qty}} {{unit}}). JPG в исходном качестве для печати.',
 };
 
 export type BotKey = keyof typeof uz;

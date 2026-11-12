@@ -115,6 +115,24 @@ export type OrderItem = {
   price: number;
   lineTotal: number;
   thumbUrl: string | null;
+  designUrl?: string | null;
+};
+
+export type PersonalTemplate = {
+  id: number;
+  titleUz: string;
+  titleRu: string;
+  imageUrl: string;
+  width: number;
+  height: number;
+  areaX: number;
+  areaY: number;
+  areaW: number;
+  areaH: number;
+  productId: number;
+  sortOrder: number;
+  isActive: boolean;
+  product: Product;
 };
 
 export type PersonRef = { id?: number; firstName: string; lastName: string; phone: string | null; telegramId?: string; username?: string | null };
@@ -124,6 +142,7 @@ export type Order = {
   number: number;
   status: OrderStatus;
   deliveryType: DeliveryType;
+  isPersonal?: boolean;
   address: string;
   lat: number | null;
   lng: number | null;

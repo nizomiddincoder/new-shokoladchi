@@ -234,7 +234,8 @@ manageRouter.delete(
     const id = Number(req.params.id);
     const p = await prisma.product.findUnique({ where: { id }, include: { images: true } });
     if (!p) throw notFound();
-    const used = await prisma.orderItem.count({ where: { productId: id } });
+    const used =
+      (await prisma.orderItem.count({ where: { productId: id } })) + (await prisma.personalTemplate.count({ where: { productId: id } }));
     if (used > 0) {
       await prisma.product.update({ where: { id }, data: { isActive: false } });
       await audit(req.actor!, 'product.deactivate', 'Product', id, null, { reason: 'has orders' });

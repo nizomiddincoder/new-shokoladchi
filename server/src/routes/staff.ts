@@ -56,7 +56,8 @@ export function staffOrderDto(o: Prisma.OrderGetPayload<{ include: typeof STAFF_
       finalQty: i.finalQty == null ? null : toNum(i.finalQty),
       price: i.priceSnapshot,
       lineTotal: i.lineTotal,
-      thumbUrl: i.product?.images?.[0] ? imageDto(i.product.images[0]).thumbUrl : null,
+      designUrl: i.designUrl ?? null,
+      thumbUrl: i.designUrl || (i.product?.images?.[0] ? imageDto(i.product.images[0]).thumbUrl : null),
     })),
   };
 }

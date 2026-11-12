@@ -182,6 +182,18 @@ Gemini yana ikki ishni bajaradi:
 
 ---
 
+## 5.1. Dizayn, logo va "Mening shokoladim"
+
+- **Kun / tun rejimi:** mini app'da tepadagi oy/quyosh tugmasi, profil va admin menyusida "Ko'rinish" bo'limi, web panelda yon menyuda. Tanlov har bir qurilmada eslab qolinadi.
+- **Logo:** Admin → Sozlamalar → "Do'kon logosi". Mini app bosh sahifasida, web panelda va kirish sahifasida ko'rinadi.
+- **Kategoriya rasmi:** Kategoriyalar → tahrirlash → "Rasm yuklash". Rasm yuklanmasa AI kategoriya nomiga mos rasmni o'zi yaratadi (ro'yxatdagi uchqun tugmasi bilan qayta yaratish mumkin). AI o'chiq bo'lsa nomga mos ikonka avtomatik tanlanadi.
+- **"Mening shokoladim"** — mijoz shokolad qadog'iga o'zi yoki yaqinlarining rasmini qo'yadi:
+  1. Admin → **Mening shokoladim** → Qo'shish: qadoq rasmini (asosiy rasm) yuklang, narx olinadigan mahsulotni tanlang.
+  2. "Mijoz rasmi joyi" — rasm ustidagi qizil to'rtburchak. Standart joy — qadoqning o'ng tarafidagi bo'sh maydon ("O'ng bo'sh joy" tugmasi); slayderlar bilan aniq moslang va "Sinab ko'rish uchun rasm" bilan natijani ko'ring.
+  3. Shablon faol bo'lishi bilan mijozlarning bosh sahifasida ajralib turadigan **"Mening shokoladim"** tugmasi chiqadi.
+  4. Mijoz rasm yuklaydi yoki suratga tushadi, rasmni barmoq bilan surib/kattalashtirib joylaydi, xohlasa matn yozadi va buyurtma beradi.
+  5. Tayyor dizayn shablonning asl o'lchamida yuqori sifatli **JPG** bo'lib saqlanadi va buyurtmalar guruhiga **fayl** sifatida (Telegram siqmaydi) `buyurtma-1045.jpg` nomi bilan, "MAXSUS BUYURTMA" belgisi va raqami bilan tushadi. Qabul qilgan sotuvchiga ham shu fayl boradi; mini app'da "JPG yuklab olish" tugmasi bor.
+
 ## 6. Xodim qo'shish
 
 1. Admin panel → **Xodimlar** → **Xodim taklif qilish**.

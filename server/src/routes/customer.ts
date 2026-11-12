@@ -7,6 +7,8 @@ import { requireTgUser } from '../lib/auth';
 import { round3, toNum } from '../lib/format';
 import { cancelOrder, createOrder, validateQty } from '../services/orders';
 import { setMenuButtonFor } from '../bot/handlers';
+import { designUpload } from '../lib/upload';
+import { saveJpeg } from '../services/storage';
 
 export const customerRouter = Router();
 customerRouter.use(requireTgUser);
@@ -141,7 +143,8 @@ function customerOrderDto(o: any) {
       finalQty: i.finalQty == null ? null : toNum(i.finalQty),
       price: i.priceSnapshot,
       lineTotal: i.lineTotal,
-      thumbUrl: i.product?.images?.[0] ? imageDto(i.product.images[0]).thumbUrl : null,
+      designUrl: i.designUrl ?? null,
+      thumbUrl: i.designUrl || (i.product?.images?.[0] ? imageDto(i.product.images[0]).thumbUrl : null),
     })),
     groupChatId: undefined,
     groupMessageId: undefined,
@@ -162,6 +165,40 @@ customerRouter.post(
       })
       .parse(req.body);
     const order = await createOrder(req.actor!.user!, body);
+    res.status(201).json({ id: order.id, number: order.number });
+  }),
+);
+
+// ---------- "Mening shokoladim" ----------
+
+/** Mijoz tayyorlagan dizayn (shablon + rasm + matn) — yuqori sifatli JPG sifatida saqlanadi */
+customerRouter.post(
+  '/designs',
+  designUpload.single('file'),
+  ah(async (req, res) => {
+    if (!req.file) throw badRequest('NO_FILE', 'Rasm topilmadi');
+    const saved = await saveJpeg(req.file.buffer, 'designs', { maxSize: 4000, quality: 95 });
+    res.status(201).json({ url: saved.url, width: saved.width, height: saved.height });
+  }),
+);
+
+customerRouter.post(
+  '/personal-orders',
+  ah(async (req, res) => {
+    const body = z
+      .object({
+        templateId: z.number().int().positive(),
+        designUrl: z.string().max(200),
+        qty: z.number().positive().max(1000),
+        deliveryType: z.enum(['PICKUP', 'DELIVERY']),
+        address: z.string().trim().max(500).optional(),
+        lat: z.number().min(-90).max(90).nullable().optional(),
+        lng: z.number().min(-180).max(180).nullable().optional(),
+        comment: z.string().trim().max(1000).optional(),
+      })
+      .parse(req.body);
+    const { templateId, designUrl, qty, ...rest } = body;
+    const order = await createOrder(req.actor!.user!, { ...rest, personal: { templateId, designUrl, qty } });
     res.status(201).json({ id: order.id, number: order.number });
   }),
 );
@@ -211,6 +248,11 @@ customerRouter.post(
     const skipped: string[] = [];
     for (const it of o.items) {
       const p = it.product;
+      // Shaxsiy rasmli shokolad qayta buyurtmada savatchaga tushmaydi (yangi dizayn kerak)
+      if (it.designUrl) {
+        skipped.push(it.nameSnapshot);
+        continue;
+      }
       const qty = round3(toNum(it.qty));
       if (!p.isActive || toNum(p.stock) < qty || !validateQty(qty, toNum(p.step), toNum(p.minQty))) {
         skipped.push(p.nameUz);

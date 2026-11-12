@@ -10,7 +10,7 @@ import { audit } from '../lib/audit';
 import { imageUpload } from '../lib/upload';
 import { escapeHtml, toNum } from '../lib/format';
 import { STAFF_ORDER_INCLUDE, staffOrderDto } from './staff';
-import { removeUpload, saveImage, type Folder } from '../services/storage';
+import { removeUpload, saveImage, saveJpeg, type Folder } from '../services/storage';
 import { dashboardStats, resolveRange } from '../services/stats';
 import { buildExport, type ExportType } from '../services/export';
 import { aiEnabled, aiMonthlyStats, enqueueCategoryImage, generateBanner } from '../services/ai';
@@ -523,6 +523,74 @@ adminRouter.post(
   }),
 );
 
+// ================= "MENING SHOKOLADIM" SHABLONLARI =================
+const frac = z.number().min(0).max(1);
+const templateBody = z
+  .object({
+    titleUz: z.string().trim().min(1).max(120),
+    imageUrl: z.string().regex(/^\/uploads\/templates\/[\w-]+\.jpg$/, 'Shablon rasmini yuklang'),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    areaX: frac,
+    areaY: frac,
+    areaW: z.number().min(0.05).max(1),
+    areaH: z.number().min(0.05).max(1),
+    productId: z.number().int().positive(),
+    sortOrder: z.number().int().default(0),
+    isActive: z.boolean().default(true),
+  })
+  .refine((b) => b.areaX + b.areaW <= 1.0001 && b.areaY + b.areaH <= 1.0001, { message: 'Rasm joyi shablon chegarasidan chiqib ketdi', path: ['areaW'] });
+
+adminRouter.get(
+  '/personal-templates',
+  ah(async (_req, res) => {
+    res.json(
+      await prisma.personalTemplate.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        include: { product: { select: { id: true, nameUz: true, nameRu: true, price: true, isActive: true } } },
+      }),
+    );
+  }),
+);
+
+adminRouter.post(
+  '/personal-templates',
+  ah(async (req, res) => {
+    const data = templateBody.parse(req.body);
+    const t = await prisma.personalTemplate.create({ data: { ...data, titleRu: data.titleUz } });
+    enqueueTranslation('template', t.id);
+    await audit(req.actor!, 'template.create', 'PersonalTemplate', t.id, null, data);
+    res.status(201).json(t);
+  }),
+);
+
+adminRouter.patch(
+  '/personal-templates/:id',
+  ah(async (req, res) => {
+    const id = Number(req.params.id);
+    const before = await prisma.personalTemplate.findUnique({ where: { id } });
+    if (!before) throw notFound();
+    const data = templateBody.parse(req.body);
+    const t = await prisma.personalTemplate.update({
+      where: { id },
+      data: { ...data, ...(data.titleUz !== before.titleUz && !aiEnabled() ? { titleRu: data.titleUz } : {}) },
+    });
+    if (data.titleUz !== before.titleUz) enqueueTranslation('template', id);
+    await audit(req.actor!, 'template.update', 'PersonalTemplate', id, before, data);
+    res.json(t);
+  }),
+);
+
+adminRouter.delete(
+  '/personal-templates/:id',
+  ah(async (req, res) => {
+    const id = Number(req.params.id);
+    const before = await prisma.personalTemplate.delete({ where: { id } });
+    await audit(req.actor!, 'template.delete', 'PersonalTemplate', id, before, null);
+    res.json({ ok: true });
+  }),
+);
+
 // ================= BANNERLAR =================
 const bannerBody = z.object({
   imageUrl: z.string().startsWith('/uploads/'),
@@ -642,7 +710,12 @@ adminRouter.post(
   imageUpload.single('file'),
   ah(async (req, res) => {
     if (!req.file) throw badRequest('NO_FILE', 'Rasm tanlanmagan');
-    const folder = z.enum(['banners', 'broadcasts', 'categories', 'branding']).default('banners').parse(req.query.folder) as Folder;
+    const folder = z.enum(['banners', 'broadcasts', 'categories', 'branding', 'templates']).default('banners').parse(req.query.folder) as Folder;
+    // Shablon chop etish sifatida (JPG, to'liq o'lcham) saqlanadi
+    if (folder === 'templates') {
+      const t = await saveJpeg(req.file.buffer, 'templates', { maxSize: 4000, quality: 95 });
+      return res.status(201).json({ url: t.url, thumbUrl: t.url, width: t.width, height: t.height });
+    }
     const saved = await saveImage(req.file.buffer, folder, folder === 'branding' ? { maxSize: 512, quality: 92 } : folder === 'categories' ? { maxSize: 600 } : {});
     res.status(201).json({ url: saved.url, thumbUrl: saved.thumbUrl });
   }),

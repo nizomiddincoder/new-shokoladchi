@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { Bike, Camera, CheckCheck, ChefHat, CircleX, HandCoins, PackageCheck, Scale, Truck } from 'lucide-react';
 import { get, post, upload } from './api';
 import { CameraCapture, cameraSupported } from './CameraCapture';
+import { DesignBlock } from './DesignBlock';
 import type { Order, Role } from './types';
-import { Button, Card, ErrorState, PageLoader, ReasonModal, useToast } from './ui';
+import { Badge, Button, Card, ErrorState, PageLoader, ReasonModal, useToast } from './ui';
 import { OrderContactBlock, OrderItemsList, OrderTimeline, OrderTotals, StatusBadge } from './orderParts';
 import { dateTime, isWeighted, money, nameOf, personName, unitLabel } from './format';
 
@@ -90,7 +91,10 @@ export function StaffOrderDetail({
       <Card className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <div className="font-display text-[24px] font-bold text-ink">#{o.number}</div>
+            <div className="flex items-center gap-2">
+              <div className="font-display text-[24px] font-bold text-ink">#{o.number}</div>
+              {o.isPersonal && <Badge tone="accent">{t('personal.badge')}</Badge>}
+            </div>
             <div className="text-[12px] text-muted">{dateTime(o.createdAt)}</div>
           </div>
           <StatusBadge status={o.status} />
@@ -124,6 +128,8 @@ export function StaffOrderDetail({
           <OrderTotals order={o} />
         </div>
       </Card>
+
+      <DesignBlock order={o} />
 
       {canWeigh && (
         <Card className="p-4">

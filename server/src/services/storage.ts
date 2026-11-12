@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import { env } from '../env';
 import { badRequest } from '../lib/errors';
 
-export const FOLDERS = ['products', 'orders', 'banners', 'broadcasts', 'categories', 'branding'] as const;
+export const FOLDERS = ['products', 'orders', 'banners', 'broadcasts', 'categories', 'branding', 'templates', 'designs'] as const;
 export type Folder = (typeof FOLDERS)[number];
 
 export async function ensureUploadDirs() {
@@ -41,6 +41,32 @@ export async function saveImage(input: Buffer, folder: Folder, opts: { quality?:
     thumbUrl: `/uploads/${folder}/${name}_t.webp`,
     filePath,
   };
+}
+
+/**
+ * Yuqori sifatli JPG sifatida saqlaydi (chop etish uchun: "Mening shokoladim" shablon va dizaynlari).
+ * Shaffof joylar oq fonga aylantiriladi.
+ */
+export async function saveJpeg(input: Buffer, folder: Folder, opts: { maxSize?: number; quality?: number } = {}) {
+  let meta;
+  try {
+    meta = await sharp(input).metadata();
+  } catch {
+    throw badRequest('BAD_IMAGE', 'Rasm formati qo\'llab-quvvatlanmaydi');
+  }
+  if (!meta.width || !meta.height) throw badRequest('BAD_IMAGE', 'Rasm o\'qilmadi');
+  const max = opts.maxSize ?? 3000;
+  const name = randomName();
+  const dir = path.join(env.UPLOAD_DIR, folder);
+  await fs.mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, `${name}.jpg`);
+  const info = await sharp(input)
+    .rotate()
+    .resize(max, max, { fit: 'inside', withoutEnlargement: true })
+    .flatten({ background: '#ffffff' })
+    .jpeg({ quality: opts.quality ?? 95, chromaSubsampling: '4:4:4', mozjpeg: true })
+    .toFile(filePath);
+  return { url: `/uploads/${folder}/${name}.jpg`, filePath, width: info.width, height: info.height };
 }
 
 export function urlToPath(url: string | null | undefined): string | null {

@@ -14,7 +14,10 @@ export function StaffOrderCard({ o, onClick }: { o: Order; onClick: () => void }
     <Card className="p-4" onClick={onClick}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="font-display text-[19px] font-bold text-ink">#{o.number}</div>
+          <div className="flex items-center gap-2">
+            <div className="font-display text-[19px] font-bold text-ink">#{o.number}</div>
+            {o.isPersonal && <Badge tone="accent">{t('personal.badge')}</Badge>}
+          </div>
           <div className="text-[12px] text-muted">{dateTime(o.createdAt)}</div>
         </div>
         <StatusBadge status={o.status} />

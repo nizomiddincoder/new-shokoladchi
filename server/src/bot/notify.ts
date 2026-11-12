@@ -30,6 +30,7 @@ export function formatPhone(p: string | null | undefined) {
 export function orderText(order: OrderFull, lang: Language, opts: { header?: string } = {}) {
   const L: string[] = [];
   L.push(opts.header ?? `<b>#${order.number}</b> — ${t(lang, `status_${order.status}` as const)}`);
+  if (order.isPersonal) L.push(`<b>${t(lang, 'personal_badge')}</b>`);
   L.push('');
   L.push(`${t(lang, 'customer')}: ${escapeHtml(fullName(order.customer))}`);
   L.push(`${t(lang, 'phone')}: ${formatPhone(order.phone || order.customer.phone)}`);
@@ -84,6 +85,29 @@ export async function sendNewOrderToGroup(order: OrderFull) {
       where: { id: order.id },
       data: { groupChatId: String(res.value.chat.id), groupMessageId: res.value.message_id },
     });
+    await sendDesignFiles(order, env.ORDERS_GROUP_CHAT_ID, 'uz', res.value.message_id);
+  }
+}
+
+/**
+ * "Mening shokoladim" dizaynlarini fayl (document) sifatida yuboradi — Telegram siqmaydi,
+ * chop etish uchun asl sifatdagi JPG keladi. Fayl nomida buyurtma raqami bor.
+ */
+export async function sendDesignFiles(order: OrderFull, chatId: string, lang: Language, replyTo?: number) {
+  const designs = order.items.filter((i) => i.designUrl);
+  for (const [idx, it] of designs.entries()) {
+    const p = urlToPath(it.designUrl);
+    if (!p) continue;
+    const suffix = designs.length > 1 ? `-${idx + 1}` : '';
+    const filename = `buyurtma-${order.number}${suffix}.jpg`;
+    const caption = t(lang, 'personal_file_caption', { number: order.number, qty: formatQty(it.qty), unit: unitLabel(it.unit, lang) });
+    await safeCall(chatId, () =>
+      bot.api.sendDocument(chatId, new InputFile(p, filename), {
+        caption,
+        parse_mode: 'HTML',
+        ...(replyTo ? { reply_parameters: { message_id: replyTo, allow_sending_without_reply: true } } : {}),
+      }),
+    );
   }
 }
 
@@ -120,13 +144,17 @@ export async function sendSellerCard(order: OrderFull) {
   const seller = order.seller;
   if (!seller) return;
   const lang = seller.language;
-  await safeCall(seller.telegramId, () =>
+  const res = await safeCall(seller.telegramId, () =>
     bot.api.sendMessage(String(seller.telegramId), orderText(order, lang), {
       parse_mode: 'HTML',
       reply_markup: sellerKeyboard(order, lang),
       link_preview_options: { is_disabled: true },
     }),
   );
+  // Qabul qilinganda sotuvchiga dizayn fayli ham boradi (tayyorlash uchun)
+  if (res.ok && order.isPersonal && order.status === 'ACCEPTED') {
+    await sendDesignFiles(order, String(seller.telegramId), lang, res.value.message_id);
+  }
 }
 
 // ---------- Mijoz ----------

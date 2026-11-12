@@ -10,12 +10,15 @@ export const cameraSupported = () => typeof navigator !== 'undefined' && !!navig
  * <input capture> ni e'tiborsiz qoldirib galereyani ochadi, shuning uchun kamerani to'g'ridan-to'g'ri ochamiz.
  * Kamera ishlamasa — galereyadan tanlash tugmasi ko'rsatiladi.
  */
-export function CameraCapture({ open, onClose, onCapture }: { open: boolean; onClose: () => void; onCapture: (file: File) => void }) {
+export function CameraCapture({ open, onClose, onCapture, initialFacing = 'environment' }: { open: boolean; onClose: () => void; onCapture: (file: File) => void; initialFacing?: 'environment' | 'user' }) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [facing, setFacing] = useState<'environment' | 'user'>('environment');
+  const [facing, setFacing] = useState<'environment' | 'user'>(initialFacing);
+  useEffect(() => {
+    if (open) setFacing(initialFacing);
+  }, [open, initialFacing]);
   const [state, setState] = useState<'starting' | 'ready' | 'error'>('starting');
   const [hasMultiple, setHasMultiple] = useState(false);
 
