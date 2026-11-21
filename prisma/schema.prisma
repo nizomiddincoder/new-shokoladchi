@@ -172,6 +172,8 @@ model Product {
   descriptionRu     String          @default("")
   categoryId        Int
   category          Category        @relation(fields: [categoryId], references: [id])
+  /// Shtrix-kod / kassa dasturidagi kod (kirim faylini moslashtirish uchun)
+  barcode           String?
   price             Int
   oldPrice          Int?
   unit              Unit            @default(PIECE)
@@ -197,6 +199,7 @@ model Product {
 
   @@index([categoryId])
   @@index([isActive])
+  @@index([barcode])
 }
 
 model ProductImage {

@@ -13,7 +13,18 @@ import { CATEGORY_ICONS, CategoryIcon } from '../shared/icons';
 import { money, nameOf, qty, unitLabel } from '../shared/format';
 import { AdminPage, TableWrap, useAdminEnv, useIsMobile } from './common';
 
-type ImportResult = { created: number; updated: number; unchanged: number; categoriesCreated: string[]; errors: { row: number; message: string }[] };
+type ImportResult = {
+  kind?: 'template' | 'purchase';
+  created: number;
+  updated: number;
+  unchanged: number;
+  categoriesCreated: string[];
+  errors: { row: number; message: string }[];
+  rowsApplied?: number;
+  rowsSkipped?: number;
+  priceChanged?: number;
+  newProducts?: { name: string; category: string }[];
+};
 
 /** Excel fayldan mahsulotlarni qo'shish/yangilash */
 function ExcelImportModal({ open, onClose, onDownload }: { open: boolean; onClose: () => void; onDownload: () => void }) {
@@ -63,6 +74,7 @@ function ExcelImportModal({ open, onClose, onDownload }: { open: boolean; onClos
     >
       {result ? (
         <div className="space-y-3">
+          {result.kind === 'purchase' && <p className="text-[14px] font-bold">{t('admin.importPurchaseTitle')}</p>}
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-success-soft p-3">
               <div className="text-[22px] font-extrabold text-success">{result.created}</div>
@@ -77,6 +89,26 @@ function ExcelImportModal({ open, onClose, onDownload }: { open: boolean; onClos
               <div className="text-[12px] font-semibold text-muted">{t('admin.importErrors')}</div>
             </div>
           </div>
+          {result.kind === 'purchase' && (
+            <ul className="space-y-0.5 text-[13px] text-muted">
+              <li>{t('admin.importRowsApplied', { count: result.rowsApplied ?? 0 })}</li>
+              {!!result.priceChanged && <li>{t('admin.importPriceChanged', { count: result.priceChanged })}</li>}
+              {!!result.rowsSkipped && <li className="font-semibold text-ink">{t('admin.importRowsSkipped', { count: result.rowsSkipped })}</li>}
+            </ul>
+          )}
+          {!!result.newProducts?.length && (
+            <div>
+              <div className="mb-1 text-[13px] font-semibold text-muted">{t('admin.importNewProducts')}</div>
+              <div className="max-h-48 space-y-0.5 overflow-y-auto rounded-xl border border-line p-2 text-[13px]">
+                {result.newProducts.map((p, i) => (
+                  <div key={i} className="flex justify-between gap-2">
+                    <span className="truncate">{p.name}</span>
+                    <span className="shrink-0 text-muted">{p.category}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {result.categoriesCreated.length > 0 && (
             <p className="text-[13px] text-muted">
               {t('admin.importNewCats')}: <b className="text-ink">{result.categoriesCreated.join(', ')}</b>
@@ -103,6 +135,7 @@ function ExcelImportModal({ open, onClose, onDownload }: { open: boolean; onClos
             <li>{t('admin.importStep2')}</li>
             <li>{t('admin.importStep3')}</li>
           </ol>
+          <p className="rounded-xl bg-primary-soft p-2.5 text-[13px] text-ink">{t('admin.importStepPurchase')}</p>
           <input ref={fileRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <button
             type="button"

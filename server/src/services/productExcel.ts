@@ -7,6 +7,8 @@ import type { Actor } from '../lib/auth';
 import { guessCategoryIcon } from '../lib/categoryIcon';
 import { enqueueCategoryImage } from './ai';
 import { enqueueTranslation } from './translate';
+import { isPurchaseSheet } from './purchaseParse';
+import { importPurchase } from './purchaseImport';
 
 /**
  * Mahsulotlarni Excel orqali eksport/import qilish.
@@ -22,6 +24,7 @@ type ColKey =
   | 'descriptionUz'
   | 'descriptionRu'
   | 'category'
+  | 'barcode'
   | 'price'
   | 'oldPrice'
   | 'unit'
@@ -46,6 +49,7 @@ const COLUMNS: { key: ColKey; header: string; width: number; aliases: string[] }
   { key: 'stock', header: 'Qoldiq', width: 10, aliases: ['qoldiq', 'stock', 'остаток'] },
   { key: 'lowStockThreshold', header: 'Kam qolgan chegarasi', width: 12, aliases: ['kam qolgan chegarasi', 'chegara', 'threshold', 'порог'] },
   { key: 'isActive', header: 'Faol', width: 8, aliases: ['faol', 'holat', 'active', 'активен'] },
+  { key: 'barcode', header: 'Shtrix-kod', width: 16, aliases: ['shtrix-kod', 'shtrix kod', 'shtrixkod', 'barcode', 'kod', 'kodi', 'штрих-код', 'код'] },
 ];
 
 const UNIT_LABEL: Record<Unit, string> = { PIECE: 'dona', KG: 'kg', GRAM: 'gramm', LITER: 'litr', BOX: 'karobka', PACK: 'pachka' };
@@ -92,6 +96,7 @@ export async function buildProductsWorkbook() {
       stock: toNum(p.stock),
       lowStockThreshold: toNum(p.lowStockThreshold),
       isActive: p.isActive ? 'Ha' : "Yo'q",
+      barcode: p.barcode ?? '',
     });
   }
 
@@ -146,6 +151,8 @@ export async function buildProductsWorkbook() {
     '10. Eski narx: joriy narxdan katta bo\'lsa chegirma sifatida ko\'rsatiladi.',
     '11. Faol: Ha — mijozlarga ko\'rinadi, Yo\'q — yashirin.',
     '12. Rasmlarni import qilib bo\'lmaydi — ularni mahsulot sahifasida qo\'shing.',
+    '13. Shtrix-kod: kassa dasturidagi kod. Kassa dasturining kirim (Ҳарид) faylini ham shu tugma orqali yuklash mumkin —',
+    '    mahsulotlar shtrix-kod yoki nomi bo\'yicha topiladi, qoldiq qo\'shiladi, sotish narxi yangilanadi, yangilari avtomatik yaratiladi.',
   ].forEach((line, i) => {
     const cell = help.getCell(i + 1, 1);
     cell.value = line;
@@ -160,11 +167,18 @@ export async function buildProductsWorkbook() {
 // ======================= IMPORT =======================
 
 export type ImportResult = {
+  /** template — shu dasturning shabloni, purchase — kassa dasturining kirim (Ҳарид) fayli */
+  kind?: 'template' | 'purchase';
   created: number;
   updated: number;
   unchanged: number;
   categoriesCreated: string[];
   errors: { row: number; message: string }[];
+  // faqat kirim fayli uchun
+  rowsApplied?: number;
+  rowsSkipped?: number;
+  priceChanged?: number;
+  newProducts?: { name: string; category: string }[];
 };
 
 function cellText(v: ExcelJS.CellValue): string {
@@ -211,6 +225,10 @@ export async function importProducts(buffer: Buffer, actor: Actor): Promise<Impo
   } catch {
     throw new Error("Faylni o'qib bo'lmadi. Faqat .xlsx formatidagi Excel fayl yuklang");
   }
+  // Kassa dasturining kirim (Ҳарид) fayli — o'zimiz moslashtiramiz
+  const purchaseWs = wb.worksheets.find((w) => w.state !== 'hidden' && isPurchaseSheet(w));
+  if (purchaseWs && !wb.getWorksheet('Mahsulotlar')) return importPurchase(purchaseWs, actor);
+
   const ws = wb.getWorksheet('Mahsulotlar') ?? wb.worksheets.find((w) => w.state !== 'hidden');
   if (!ws) throw new Error('Excel faylda varaq topilmadi');
 
@@ -276,6 +294,7 @@ export async function importProducts(buffer: Buffer, actor: Actor): Promise<Impo
       const stock = parseNum(get('stock'));
       const low = parseNum(get('lowStockThreshold'));
       const isActive = parseBool(get('isActive'));
+      const barcode = get('barcode').replace(/\s+/g, '').slice(0, 64);
 
       if (!before) {
         if (!nameUz) throw new Error('Nomi (uz) majburiy');
@@ -309,6 +328,7 @@ export async function importProducts(buffer: Buffer, actor: Actor): Promise<Impo
               descriptionUz,
               descriptionRu: descriptionRu || descriptionUz,
               categoryId: categoryId!,
+              barcode: barcode || null,
               price: finalPrice,
               oldPrice: finalOld,
               unit: finalUnit,
@@ -347,6 +367,7 @@ export async function importProducts(buffer: Buffer, actor: Actor): Promise<Impo
       if (minQty != null && round3(minQty) !== toNum(before.minQty)) data.minQty = round3(minQty);
       if (low != null && round3(low) !== toNum(before.lowStockThreshold)) data.lowStockThreshold = round3(low);
       if (isActive != null && isActive !== before.isActive) data.isActive = isActive;
+      if (barcode && barcode !== before.barcode) data.barcode = barcode;
       const stockDelta = stock != null ? round3(stock - toNum(before.stock)) : 0;
 
       if (!Object.keys(data).length && !stockDelta) {
