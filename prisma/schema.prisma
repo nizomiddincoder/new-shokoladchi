@@ -107,6 +107,8 @@ model User {
   pendingInviteId       Int?
   awaitingPhotoOrderId  Int?
   awaitingCancelOrderId Int?
+  /// /start product_ID orqali kelgan, ro'yxatdan o'tgach ochiladigan mahsulot
+  pendingProductId      Int?
 
   orders          Order[]         @relation("CustomerOrders")
   sellerOrders    Order[]         @relation("SellerOrders")

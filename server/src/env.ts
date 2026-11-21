@@ -22,6 +22,7 @@ type Env = {
   SEED_DEMO_DATA: boolean;
   BOT_WEBHOOK: boolean;
   TELEGRAM_API_ROOT: string;
+  SEARCH_API_KEY: string | null;
   isProd: boolean;
 };
 
@@ -88,6 +89,8 @@ function loadEnv(): Env {
     BOT_WEBHOOK: process.env.BOT_WEBHOOK !== 'false',
     // O'z Bot API serveringiz bo'lsa (ixtiyoriy)
     TELEGRAM_API_ROOT: (process.env.TELEGRAM_API_ROOT || 'https://api.telegram.org').replace(/\/+$/, ''),
+    // GET /search uchun kalit (X-API-Key). Bo'sh bo'lsa /search har doim 401 qaytaradi
+    SEARCH_API_KEY: process.env.SEARCH_API_KEY?.trim() || null,
   };
 }
 

@@ -21,6 +21,7 @@ import { customerRouter } from './routes/customer';
 import { staffRouter } from './routes/staff';
 import { manageRouter } from './routes/manage';
 import { adminRouter } from './routes/admin';
+import { searchRouter } from './routes/search';
 import { backfillUploadBlobs, ensureLocal, ensureUploadDirs, mimeOf } from './services/storage';
 import { startCron } from './services/cron';
 import { fillMissingCategoryImages, resumePendingAi } from './services/ai';
@@ -69,6 +70,9 @@ function buildApp() {
       res.status(503).json({ ok: false, db: 'error' });
     }
   });
+
+  // Tashqi mahsulot qidiruvi (X-API-Key bilan himoyalangan)
+  app.use('/search', rateLimit({ windowMs: 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false }), searchRouter);
 
   // Telegram webhook
   app.post(WEBHOOK_PATH, webhookCallback(bot, 'express', { secretToken: WEBHOOK_SECRET, timeoutMilliseconds: 25_000, onTimeout: 'return' }));

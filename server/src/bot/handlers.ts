@@ -127,6 +127,32 @@ function toActor(user: User): OrderActor {
   return { userId: user.id, role: user.role, label: actorLabelOf(user) };
 }
 
+/** "/start product_123" -> 123 */
+function productIdFromPayload(payload: string): number | null {
+  const m = /^product_(\d{1,9})$/.exec(payload);
+  return m ? Number(m[1]) : null;
+}
+
+/** Mahsulot kartasi + Mini App'da shu mahsulot sahifasini ochuvchi tugma */
+async function sendProductLink(ctx: Context, user: User, productId: number, menuIfMissing = true) {
+  const lang = user.language;
+  const p = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { id: true, nameUz: true, nameRu: true, price: true, stock: true, isActive: true, category: { select: { isActive: true } } },
+  });
+  if (!p || !p.isActive || !p.category.isActive) {
+    await ctx.reply(t(lang, 'product_link_missing'));
+    return menuIfMissing ? sendMainMenu(ctx, user) : undefined;
+  }
+  const vars = { name: escapeHtml((lang === 'ru' && p.nameRu) || p.nameUz), price: formatMoney(p.price, lang) };
+  await ctx.reply(t(lang, Number(p.stock) > 0 ? 'product_link' : 'product_link_out', vars), {
+    parse_mode: 'HTML',
+    reply_markup: new InlineKeyboard().webApp(t(lang, 'product_link_btn'), appUrl(`product/${p.id}`)),
+  });
+  await setMenuButtonFor(user);
+  return undefined;
+}
+
 export function registerHandlers() {
   // Faqat shaxsiy chatdagi buyruqlar
   const pm = bot.chatType('private');
@@ -156,6 +182,18 @@ export function registerHandlers() {
         parse_mode: 'HTML',
         reply_markup: phoneKeyboard(lang),
       });
+    }
+
+    // Mahsulot havolasi: t.me/<bot>?start=product_123
+    const productId = productIdFromPayload(payload);
+    if (productId) {
+      if (user.regStep === 'DONE') {
+        // Mahsulot sahifasi faqat mijoz ilovasida bor
+        return user.role === 'CUSTOMER' ? sendProductLink(ctx, user, productId) : sendMainMenu(ctx, user);
+      }
+      // Avval ro'yxatdan o'tadi, keyin shu mahsulot ochiladi
+      user = await prisma.user.update({ where: { id: user.id }, data: { pendingProductId: productId } });
+      await ctx.reply(t(lang, 'product_link_after_reg'));
     }
 
     if (user.regStep === 'DONE') return sendMainMenu(ctx, user);
@@ -250,8 +288,15 @@ export function registerHandlers() {
     }
 
     const wasDone = user.regStep === 'DONE';
-    user = await prisma.user.update({ where: { id: user.id }, data: { phone, regStep: 'DONE' } });
-    return sendMainMenu(ctx, user, wasDone ? undefined : t(lang, 'registered', { name: escapeHtml(actorLabelOf(user)) }));
+    const pendingProductId = user.pendingProductId;
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { phone, regStep: 'DONE', ...(pendingProductId ? { pendingProductId: null } : {}) },
+    });
+    await sendMainMenu(ctx, user, wasDone ? undefined : t(lang, 'registered', { name: escapeHtml(actorLabelOf(user)) }));
+    // /start product_ID bilan kelgan bo'lsa — ro'yxatdan o'tgach shu mahsulot
+    if (pendingProductId && user.role === 'CUSTOMER') await sendProductLink(ctx, user, pendingProductId, false);
+    return undefined;
   });
 
   pm.on('message:photo', async (ctx) => {
