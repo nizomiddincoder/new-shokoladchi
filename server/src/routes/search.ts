@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { prisma } from '../db';
 import { env } from '../env';
+import { imageDto } from '../lib/dto';
 import { ah } from '../lib/errors';
 import { toNum } from '../lib/format';
 import { searchItems } from '../services/search';
@@ -37,13 +38,24 @@ searchRouter.get(
       return;
     }
     const products = await prisma.product.findMany({
-      select: { id: true, nameUz: true, nameRu: true, price: true, stock: true, isActive: true },
+      select: { id: true, nameUz: true, nameRu: true, descriptionUz: true, price: true, stock: true, isActive: true },
     });
     const found = searchItems(
       q,
       products.map((p) => ({ ...p, names: [p.nameUz, p.nameRu] })),
       limit,
     );
+    // Rasmlar faqat topilgan mahsulotlar uchun, bitta so'rovda; har biriga birinchisi
+    const images = found.length
+      ? await prisma.productImage.findMany({
+          where: { productId: { in: found.map((p) => p.id) } },
+          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        })
+      : [];
+    const firstImage = new Map<number, string>();
+    for (const img of images) {
+      if (img.productId != null && !firstImage.has(img.productId)) firstImage.set(img.productId, imageDto(img).url);
+    }
     res.json(
       found.map((p) => ({
         id: p.id,
@@ -51,6 +63,9 @@ searchRouter.get(
         price: p.price,
         // Mijozlarga ko'rinadi va omborda bor
         available: p.isActive && toNum(p.stock) > 0,
+        // "/uploads/..." nisbiy yo'l (kalitsiz ochiq); rasm bo'lmasa null
+        image: firstImage.get(p.id) ?? null,
+        description: p.descriptionUz || '',
       })),
     );
   }),
